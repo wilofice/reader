@@ -50,24 +50,92 @@ un lien vers cet exécutable dans un répertoire de votre `PATH`.
 
 ## Modes de lecture
 
+Pour se concentrer sur un passage isolé, utilisez le **mode mots avec avance
+automatique** :
+
 ```sh
-# Passages de 10 lignes affichées, avec avance manuelle
+./reader "notes.txt" -m w -s 80 -a -w 240
+```
+
+Cette commande affiche jusqu'à **80 mots à la fois**, puis remplace le passage
+par le suivant après environ **20 secondes** à 240 mots/minute.
+
+| Mode | Texte affiché | Avance |
+| --- | --- | --- |
+| `-m l` (`lines`) | Un passage de lignes ; 15 par défaut | Passage suivant avec `n`, ou automatiquement avec `-a` |
+| `-m w` (`words`) | Un lot de mots ; 120 par défaut | Lot suivant avec `n`, ou automatiquement avec `-a` |
+| `-m s` (`scroll`) | Une fenêtre de lignes ; 15 par défaut | Automatique dès le démarrage, une ligne à la fois |
+
+Le mode `s` conserve donc du contexte à l'écran : il décale une fenêtre de texte.
+Le mode `w -a` renouvelle le passage entier et convient mieux pour isoler ce
+qu'on lit. Pour isoler une seule ligne en automatique, utilisez `-m s -s 1`.
+
+```sh
+# Une seule ligne à la fois, avec avance manuelle
+./reader "notes.txt" -m l -s 1
+
+# Passages de 10 lignes, avec avance manuelle
 ./reader "notes.txt" -m l -s 10
 
-# Lots de 80 mots
+# Lots de 80 mots, avec avance manuelle
 ./reader "notes.txt" -m w -s 80
 
-# Lots automatiques à 220 mots par minute
-./reader "notes.txt" -m w -s 80 -a -w 220
+# Une seule ligne à la fois, avec avance automatique
+./reader "notes.txt" -m s -s 1 -w 240
 
-# Défilement ligne par ligne, démarrant automatiquement
+# Fenêtre de 15 lignes défilant une ligne à la fois
 ./reader "notes.txt" -m s -w 180
 ```
 
-Les modes courts `l`, `w`, `s` correspondent à `lines`, `words`, `scroll`.
-Toutes les anciennes formes restent acceptées, par exemple
-`--mode words --size 80`. La lettre `w` après `-m` choisit le mode mots ;
-l'option `-w 220` règle la vitesse.
+**`-s` règle la quantité de texte affichée**, en lignes pour `l` et `s`, en mots
+pour `w`. Les lignes longues sont repliées selon la largeur du terminal. Les
+passages tiennent dans la fenêtre : le nombre demandé est un maximum, et un
+lot de 80 mots peut être plus court si l'écran ne peut pas tout afficher.
+
+Pendant la lecture, `[` réduit le passage et `]` l'augmente : d'une ligne en
+mode `l` ou `s`, de dix mots en mode `w`, avec un minimum de un. La valeur
+apparaît sous le titre. La position courante reste inchangée ; le délai
+automatique est recalculé pour le nouveau passage. Ces réglages valent pour la
+session ; utilisez `-s` pour choisir la taille au démarrage.
+
+## Régler la vitesse automatique
+
+**`-w` règle la vitesse dans tous les modes automatiques**, y compris `-m w -a`.
+Sans `-w`, la vitesse est de **200 mots/minute**. Dans les modes manuels `l`
+et `w`, le lecteur attend votre action : `-w` seul n'active pas l'automatique.
+
+La lettre `w` après `-m` choisit le **mode mots** ; l'option `-w 240` choisit
+la **vitesse**. Par exemple :
+
+```sh
+# Même taille de passage, rythme plus lent : environ 40 secondes pour 80 mots
+./reader "notes.txt" -m w -s 80 -a -w 120
+
+# Même taille de passage, rythme plus rapide : environ 20 secondes pour 80 mots
+./reader "notes.txt" -m w -s 80 -a -w 240
+```
+
+Pour raisonner en mots par seconde, multipliez par 60 :
+
+| Rythme souhaité | Valeur à passer |
+| --- | --- |
+| 1 mot/seconde | `-w 60` |
+| 2 mots/seconde | `-w 120` |
+| 3 mots/seconde | `-w 180` |
+| 4 mots/seconde | `-w 240` |
+| 5 mots/seconde | `-w 300` |
+
+Le délai vaut `nombre de mots × 60 / vitesse`. En mode `l -a` ou `w -a`, il
+dépend du passage réellement affiché ; en mode `s`, de la première ligne qui
+va quitter la fenêtre. Le rythme reste approximatif, avec un délai minimal
+de 0,25 seconde. Une ligne ou un lot de plusieurs mots n'est donc pas remplacé
+à chaque mot. Pendant la lecture, `+` et `-` ajustent la vitesse, et `a` active
+ou suspend l'avance automatique.
+
+## Options courtes et longues
+
+Toutes les anciennes formes restent acceptées. Par exemple,
+`--mode words --size 80 --auto --wpm 240` équivaut à `-m w -s 80 -a -w 240`.
 
 | Option courte | Option longue | Fonction |
 | --- | --- | --- |
@@ -82,18 +150,6 @@ l'option `-w 220` règle la vitesse.
 | `-H` | `--history` | Historique |
 | `-p` | `--status` | Progression en JSON |
 | `-h` | `--help` | Aide |
-
-Les passages tiennent dans la fenêtre : le nombre demandé est un maximum.
-Pendant la lecture, `[` réduit le passage et `]` l'augmente : d'une ligne en
-mode `lines` ou `scroll`, de dix mots en mode `words`, avec un minimum de un.
-La valeur apparaît sous le titre. La position courante reste inchangée ; le
-délai automatique est recalculé pour le nouveau passage. Ces réglages valent
-pour la session ; utilisez `--size` pour choisir la taille au démarrage.
-
-Les longues lignes sont repliées sans perdre de texte. Le mode `scroll` déplace
-la fenêtre d'une ligne à la fois ; chaque délai dépend du nombre de mots de
-cette ligne. Les autres modes automatiques calculent le délai sur le passage
-affiché. Le rythme reste approximatif, avec un délai minimal de 0,25 seconde.
 
 ## Touches
 
