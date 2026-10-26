@@ -1,0 +1,10 @@
+# Fichiers générés localement
+__pycache__/
+*.py[cod]
+.DS_Store
+
+# La mémoire de lecture est personnelle et ne doit pas être versionnée.
+*.sqlite3
+*.sqlite3-*
+*.db
+*.db-*
