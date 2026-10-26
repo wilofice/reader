@@ -92,7 +92,7 @@ pour `w`. Les lignes longues sont repliées selon la largeur du terminal. Les
 passages tiennent dans la fenêtre : le nombre demandé est un maximum, et un
 lot de 80 mots peut être plus court si l'écran ne peut pas tout afficher.
 
-Pendant la lecture, `[` réduit le passage et `]` l'augmente : d'une ligne en
+Pendant la lecture, `j` réduit le passage et `k` l'augmente : d'une ligne en
 mode `l` ou `s`, de dix mots en mode `w`, avec un minimum de un. La valeur
 apparaît sous le titre. La position courante reste inchangée ; le délai
 automatique est recalculé pour le nouveau passage. Ces réglages valent pour la
@@ -160,14 +160,35 @@ Toutes les anciennes formes restent acceptées. Par exemple,
 | Espace | Suspendre l'automatique ; avancer en lecture manuelle |
 | `a` | Activer ou suspendre l'automatique |
 | `+`, `-` | Modifier la vitesse de 25 mots/minute |
-| `[`, `]` | Réduire / augmenter le nombre de lignes ou de mots affichés |
+| `j`, `k` | Réduire / augmenter le nombre de lignes ou de mots affichés |
+| `?` | Ouvrir / fermer l'aide, avec suspension de l'avance automatique |
 | `g` | Revenir au début |
 | `q`, Échap | Sauvegarder et quitter |
 
 Le retour retrouve les passages visités pendant la session. Après réouverture,
 il recalcule le passage précédent selon la taille actuelle du terminal.
+Les touches `[` et `]` (crochets ouvrant et fermant) restent aussi acceptées
+pour réduire et augmenter le passage. Elles désignent des touches à presser,
+pas des éléments décoratifs de l'interface.
+
+Dans l'aide, les flèches haut/bas permettent de défiler si nécessaire ; `?` ou
+Échap revient à la lecture, et `q` quitte le lecteur. Si l'avance automatique
+était active, elle reprend avec un nouveau délai complet à la fermeture de l'aide.
 
 ## Lisibilité et aperçu Markdown
+
+Le contenu est présenté dans une colonne centrée, limitée à 76 colonnes de
+largeur, avec une séparation sous l'en-tête et une barre de progression sur
+presque toute la fenêtre. Le mode, la vitesse et l'état de lecture sont indiqués
+en haut. L'aide complète est accessible avec `?` pour garder le bas de l'écran
+discret. Les petits terminaux utilisent une présentation compacte.
+
+Une couleur cyan souligne les indications et la progression, sans changer la
+couleur de fond du terminal. Pour désactiver les couleurs :
+
+```sh
+NO_COLOR=1 ./reader "notes.txt"
+```
 
 La **taille des caractères** se règle dans votre application de terminal :
 utilisez son menu de zoom ou ses préférences de police. Sur Terminal et iTerm
@@ -228,5 +249,6 @@ python3 -m unittest discover -s tests -v
 Les tests vérifient les positions persistantes, les changements de documents,
 le découpage sans perte, le rendu Markdown et l'extraction PDF simulée. Les tests
 en pseudo-terminal vérifient les touches, le changement de taille, la reprise,
-le défilement, la fin de lecture et la restauration du terminal. Un test extrait
+la pause pendant l'aide, l'affichage compact, le défilement, la fin de lecture
+et la restauration du terminal. Un test extrait
 aussi un vrai PDF si Poppler est disponible ; sinon ce test est ignoré.

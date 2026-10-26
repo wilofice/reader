@@ -18,9 +18,9 @@ EXECUTABLE = str(Path(__file__).resolve().parents[1] / "reader")
 
 
 class TerminalTests(unittest.TestCase):
-    def session(self, args, actions):
+    def session(self, args, actions, terminal_size=(24, 80)):
         master, slave = pty.openpty()
-        fcntl.ioctl(slave, termios.TIOCSWINSZ, struct.pack("HHHH", 24, 80, 0, 0))
+        fcntl.ioctl(slave, termios.TIOCSWINSZ, struct.pack("HHHH", *terminal_size, 0, 0))
         original = termios.tcgetattr(slave)
         process = subprocess.Popen(
             [EXECUTABLE, *args], stdin=slave, stdout=slave, stderr=slave,
@@ -97,6 +97,33 @@ class TerminalTests(unittest.TestCase):
             self.assertEqual(self.status(args)["position"], first)
             output = self.session(args + ["-m", "w", "-s", "20"], [(0.4, b"["), (0.2, b"q")])
             self.assertIn(b"Passage : 10 mots", output)
+
+    def test_help_pauses_auto_and_new_size_keys(self):
+        with tempfile.TemporaryDirectory() as directory:
+            folder = Path(directory)
+            document = folder / "notes.txt"
+            document.write_text(" ".join(f"mot{i}" for i in range(100)))
+            args = [str(document), "-S", str(folder / "state.sqlite3"), "-m", "w", "-s", "20"]
+            output = self.session(args + ["-a", "-w", "1200"], [(0.4, b"?"), (1.5, b"q")])
+            self.assertIn("Raccourcis de lecture".encode(), output)
+            self.assertIn("En pause".encode(), output)
+            self.assertEqual(self.status(args)["position"], 0)
+            output = self.session(args, [(0.4, b"j"), (0.2, b"k"), (0.2, b"q")])
+            self.assertIn(b"Passage : 10 mots", output)
+            self.assertIn(b"Passage : 20 mots", output)
+            self.assertEqual(self.status(args)["position"], 0)
+            self.session(args, [(0.4, b"?"), (0.2, b"\x1b"), (0.3, b"n"), (0.2, b"q")])
+            self.assertGreater(self.status(args)["position"], 0)
+
+    def test_compact_terminal_layout(self):
+        with tempfile.TemporaryDirectory() as directory:
+            folder = Path(directory)
+            document = folder / "notes.txt"
+            document.write_text("Lecture dans un petit terminal.\n" * 20)
+            args = [str(document), "-S", str(folder / "state.sqlite3")]
+            output = self.session(args, [(0.4, b"n"), (0.2, b"q")], terminal_size=(8, 35))
+            self.assertIn(b"notes.txt", output)
+            self.assertGreater(self.status(args)["position"], 0)
 
 
 if __name__ == "__main__":

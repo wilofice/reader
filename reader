@@ -258,6 +258,21 @@ def clipped(text, width):
     return "".join(result)
 
 
+def terminal_accent():
+    """Keep the terminal background and fall back to monochrome when needed."""
+    if "NO_COLOR" in os.environ:
+        return curses.A_BOLD
+    try:
+        if curses.has_colors():
+            curses.start_color()
+            curses.use_default_colors()
+            curses.init_pair(1, curses.COLOR_CYAN, -1)
+            return curses.color_pair(1)
+    except curses.error:
+        pass
+    return curses.A_BOLD
+
+
 def run_ui(screen, text, path, memory, args, position, changed, source=None, offsets=None):
     source = text if source is None else source
 
@@ -268,14 +283,32 @@ def run_ui(screen, text, path, memory, args, position, changed, source=None, off
         curses.curs_set(0)
     except curses.error:
         pass
+    accent = terminal_accent()
     screen.timeout(100)
     auto = args.auto or args.mode == "scroll"
+    paused = False
     speed = args.wpm
     deadline = None
     stack = []
     notice = "Fichier modifié : reprise au début." if changed else ""
     last_saved = None
     last_layout = None
+    help_open = False
+    help_offset = 0
+    help_lines = [
+        "Raccourcis de lecture", "",
+        "n / Entrée / →    Passage suivant",
+        "b / ←             Passage précédent, puis pause",
+        "Espace            Avancer en manuel ; pause en auto",
+        "a                 Activer ou suspendre l'automatique",
+        "j / k             Réduire / augmenter le passage",
+        "+ / -             Accélérer / ralentir de 25 mots/min",
+        "g                 Revenir au début",
+        "q                 Sauvegarder et quitter", "",
+        "[ et ] règlent aussi la taille du passage.",
+        "Police plus grande : utilisez le zoom du terminal.",
+        "? / Échap          Fermer cette aide",
+    ]
 
     def save():
         nonlocal last_saved
@@ -289,10 +322,10 @@ def run_ui(screen, text, path, memory, args, position, changed, source=None, off
             height, width = screen.getmaxyx()
             screen.erase()
 
-            def put(y, value, style=0):
+            def put(y, value, style=0, x=0):
                 if 0 <= y < height:
                     try:
-                        screen.addstr(y, 0, clipped(value, max(0, width - 1)), style)
+                        screen.addstr(y, x, clipped(value, max(0, width - x - 1)), style)
                     except curses.error:
                         pass
 
@@ -306,7 +339,11 @@ def run_ui(screen, text, path, memory, args, position, changed, source=None, off
                     break
                 continue
 
-            body_height, body_width = height - 7, width - 2
+            spacious = height >= 14
+            body_start = 5 if spacious else 3
+            body_height = height - body_start - 4
+            body_width = min(76, width - 6)
+            body_left = (width - body_width) // 2
             layout = (body_height, body_width)
             if layout != last_layout:
                 deadline = None
@@ -316,61 +353,102 @@ def run_ui(screen, text, path, memory, args, position, changed, source=None, off
             done = position >= len(text)
             if done:
                 auto = False
-            if auto and deadline is None:
+            if auto and not help_open and deadline is None:
                 words = max(1, len(re.findall(r"\S+", text[position:step])))
                 deadline = time.monotonic() + max(0.25, words * 60 / speed)
 
-            put(0, f"{path.name} | {args.mode} | {speed} mots/min | {'AUTO' if auto else 'MANUEL'}", curses.A_BOLD)
+            put(0, path.name, curses.A_BOLD, x=2)
+            mode_label = {"lines": "Lignes", "words": "Mots", "scroll": "Défilement"}[args.mode]
+            reading_state = "Lecture terminée" if done else "En pause · aide" if help_open else "Lecture automatique" if auto else "En pause" if paused else "Lecture manuelle"
+            metadata = f"{mode_label} · {speed} mots/min · {reading_state}"
+            if width < 65:
+                reading_state = "Fin" if done else "Pause" if help_open or paused else "Auto" if auto else "Manuel"
+                metadata = f"{mode_label} · {speed} m/min · {reading_state}"
+            put(1, metadata, accent, x=2)
             unit = "mots" if args.mode == "words" else "lignes"
-            put(1, f"Passage : {args.size} {unit} | [ : réduire  ] : augmenter" + (" | aperçu Markdown" if offsets is not None else ""))
-            for index, (_, _, line) in enumerate(visible):
-                put(index + 3, line)
-            if done:
-                put(3, "Lecture terminée. g : relire depuis le début ; b : revenir.")
+            if spacious:
+                setting = f"Passage : {args.size} {unit}"
+                if width >= 65:
+                    setting += "    j réduire · k augmenter"
+                put(2, setting, x=2)
+            put(body_start - 2 if spacious else 2, "─" * (width - 4), curses.A_DIM, x=2)
+            if help_open:
+                help_text = "\n".join(help_lines)
+                help_view = [row[2] for row in rows(help_text, 0, len(help_text), body_width, len(help_text))]
+                help_offset = min(help_offset, max(0, len(help_view) - body_height))
+                for index, line in enumerate(help_view[help_offset:help_offset + body_height]):
+                    put(body_start + index, line, curses.A_BOLD if help_offset + index == 0 else 0, x=body_left)
+            else:
+                for index, (_, _, line) in enumerate(visible):
+                    put(body_start + index, line, x=body_left)
+                if done:
+                    put(body_start, "Lecture terminée.", curses.A_BOLD, x=body_left)
+                    if body_height > 1:
+                        put(body_start + 1, "g : relire · b : revenir", x=body_left)
             fraction = source_position() / len(source)
             bar_width = width - 10
             filled, remainder = divmod(int(bar_width * 8 * fraction), 8)
             partial = "▏▎▍▌▋▊▉"[remainder - 1] if remainder else ""
             bar = "█" * filled + partial + "░" * (bar_width - filled - bool(partial))
-            put(height - 3, f"[{bar}] {fraction:6.1%}")
-            put(height - 2, notice or "n/→ : suite  b/← : retour  espace : suite/pause")
-            put(height - 1, "a : auto  +/- : vitesse  g : début  q : sauver/quitter")
+            put(height - 3, f"[{bar}] {fraction:6.1%}", accent)
+            if help_open:
+                put(height - 2, "↑/↓ : défiler · ?/Échap : retour")
+                put(height - 1, "Lecture suspendue pendant l'aide", curses.A_DIM)
+            else:
+                put(height - 2, notice or "n suite · b retour · espace suite/pause", curses.A_DIM)
+                put(height - 1, "j/k taille · ? aide · q quitter")
             screen.refresh()
             key = screen.getch()
             advance = False
+            if key == ord("?") or (help_open and key == 27):
+                help_open = not help_open
+                help_offset = 0
+                deadline = None
+                continue
             if key in (ord("q"), 27):
                 break
             if key == curses.KEY_RESIZE:
                 deadline = None
+                continue
+            if help_open:
+                if key in (curses.KEY_DOWN, curses.KEY_NPAGE, ord(" ")):
+                    help_offset = min(max(0, len(help_view) - body_height), help_offset + 1)
+                elif key in (curses.KEY_UP, curses.KEY_PPAGE):
+                    help_offset = max(0, help_offset - 1)
                 continue
             if key in (ord("n"), curses.KEY_RIGHT, curses.KEY_DOWN, 10, 13):
                 advance = True
             elif key == ord(" "):
                 if auto:
                     auto, deadline = False, None
+                    paused = True
                 else:
                     advance = True
             elif key == ord("a"):
                 auto, deadline = not auto, None
+                paused = not auto
             elif key in (ord("+"), ord("="), ord("-")):
                 speed = max(10, min(3000, speed + (-25 if key == ord("-") else 25)))
                 deadline = None
-            elif key in (ord("["), ord("]")):
+            elif key in (ord("j"), ord("k"), ord("["), ord("]")):
                 amount = 10 if args.mode == "words" else 1
-                args.size = max(1, args.size + (amount if key == ord("]") else -amount))
+                args.size = max(1, args.size + (amount if key in (ord("k"), ord("]")) else -amount))
                 deadline = None
                 notice = f"Passage : {args.size} {unit} (limité à la fenêtre)."
             elif key in (ord("b"), curses.KEY_LEFT, curses.KEY_UP):
                 position = stack.pop() if stack else previous(text, position, args.mode, args.size, body_width, body_height)
+                paused = paused or auto
                 auto, deadline = False, None
             elif key == ord("g"):
                 stack.append(position)
                 position, auto, deadline = 0, False, None
+                paused = False
             elif key == -1 and auto and deadline is not None and time.monotonic() >= deadline:
                 advance = True
             if advance and not done:
                 stack.append(position)
                 position = step
+                paused = False
                 deadline = None
                 notice = ""
     finally:
