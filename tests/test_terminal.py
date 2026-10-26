@@ -95,7 +95,7 @@ class TerminalTests(unittest.TestCase):
             self.assertEqual(self.status(args)["position"], first)
             self.session(args + ["--raw"], [(0.4, b"q")])
             self.assertEqual(self.status(args)["position"], first)
-            output = self.session(args + ["--mode", "words", "--size", "20"], [(0.4, b"["), (0.2, b"q")])
+            output = self.session(args + ["-m", "w", "-s", "20"], [(0.4, b"["), (0.2, b"q")])
             self.assertIn(b"Passage : 10 mots", output)
 
 

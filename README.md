@@ -52,17 +52,36 @@ un lien vers cet exécutable dans un répertoire de votre `PATH`.
 
 ```sh
 # Passages de 10 lignes affichées, avec avance manuelle
-./reader "notes.txt" --mode lines --size 10
+./reader "notes.txt" -m l -s 10
 
 # Lots de 80 mots
-./reader "notes.txt" --mode words --size 80
+./reader "notes.txt" -m w -s 80
 
 # Lots automatiques à 220 mots par minute
-./reader "notes.txt" --mode words --size 80 --auto --wpm 220
+./reader "notes.txt" -m w -s 80 -a -w 220
 
 # Défilement ligne par ligne, démarrant automatiquement
-./reader "notes.txt" --mode scroll --wpm 180
+./reader "notes.txt" -m s -w 180
 ```
+
+Les modes courts `l`, `w`, `s` correspondent à `lines`, `words`, `scroll`.
+Toutes les anciennes formes restent acceptées, par exemple
+`--mode words --size 80`. La lettre `w` après `-m` choisit le mode mots ;
+l'option `-w 220` règle la vitesse.
+
+| Option courte | Option longue | Fonction |
+| --- | --- | --- |
+| `-m` | `--mode` | Mode de lecture |
+| `-s` | `--size` | Taille du passage |
+| `-a` | `--auto` | Avance automatique |
+| `-w` | `--wpm` | Vitesse en mots/minute |
+| `-r` | `--restart` | Reprendre au début |
+| `-e` | `--encoding` | Encodage du texte |
+| `-R` | `--raw` | Source Markdown |
+| `-S` | `--state` | Chemin de la base |
+| `-H` | `--history` | Historique |
+| `-p` | `--status` | Progression en JSON |
+| `-h` | `--help` | Aide |
 
 Les passages tiennent dans la fenêtre : le nombre demandé est un maximum.
 Pendant la lecture, `[` réduit le passage et `]` l'augmente : d'une ligne en

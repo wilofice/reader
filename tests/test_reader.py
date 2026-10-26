@@ -15,6 +15,28 @@ loader.exec_module(reader)
 
 
 class ReadingTests(unittest.TestCase):
+    def test_short_cli_options_match_long_options(self):
+        import contextlib
+        import io
+
+        with tempfile.TemporaryDirectory() as folder:
+            document = Path(folder) / "notes.txt"
+            document.write_bytes(b"caf\xe9\n")
+            database = str(Path(folder) / "state.sqlite3")
+
+            def invoke(options):
+                output = io.StringIO()
+                with contextlib.redirect_stdout(output):
+                    self.assertEqual(reader.main(options), 0)
+                return output.getvalue()
+
+            expected = invoke([str(document), "--status", "--state", database, "--encoding", "latin-1"])
+            for mode in ("l", "w", "s"):
+                actual = invoke([str(document), "-p", "-S", database, "-e", "latin-1",
+                                 "-m", mode, "-s", "5", "-a", "-w", "180", "-r", "-R"])
+                self.assertEqual(actual, expected)
+            self.assertEqual(invoke(["-H", "-S", database]), invoke(["--history", "--state", database]))
+
     def test_markdown_preview_and_source_positions(self):
         source = '''<img src="logo.png" />
 # Un **titre**
