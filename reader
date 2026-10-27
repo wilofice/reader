@@ -20,6 +20,7 @@ import sys
 import termios
 import time
 import unicodedata
+from pdf_preview import inspect_pdf
 
 
 # Devise de Reader choisie par l'utilisateur, sans attribution à un auteur.
@@ -485,6 +486,7 @@ def run_ui(screen, text, path, memory, args, position, changed, source=None, off
         "g                 Revenir au début",
         "z                 Activer / quitter ZEN",
         "i                 Référence de page ou ligne source",
+        "v                 Aperçu visuel de la page PDF",
         "N                 Nouvelle lecture après la fin",
         "q                 Sauvegarder et quitter", "",
         "[ et ] règlent aussi la taille du passage.",
@@ -591,6 +593,8 @@ def run_ui(screen, text, path, memory, args, position, changed, source=None, off
             put(body_start - 2 if spacious else 2, "─" * (width - 4), curses.A_DIM, x=2)
             if help_open:
                 info = ["Référence du passage", "", str(path)]
+                if notice:
+                    info += [notice, ""]
                 if page_starts:
                     info += [f"Page(s) PDF : {page_label} / {len(page_starts)} (index physique)",
                              "Le numéro imprimé sur la page peut être différent.",
@@ -613,7 +617,7 @@ def run_ui(screen, text, path, memory, args, position, changed, source=None, off
                     if body_height > 1:
                         put(body_start + 1, "g / b : revoir dans ce cycle", x=body_left, chrome=False)
             if page_starts and not help_open:
-                put(height - 2, notice or f"Page(s) PDF {page_label}/{len(page_starts)} · i : référence", curses.A_DIM)
+                put(height - 2, notice or f"Page(s) PDF {page_label}/{len(page_starts)} · v : image · i : référence", curses.A_DIM)
             fraction = source_position() / len(source)
             bar_width = width - 10
             filled, remainder = divmod(int(bar_width * 8 * fraction), 8)
@@ -647,6 +651,31 @@ def run_ui(screen, text, path, memory, args, position, changed, source=None, off
                 break
             if key == curses.KEY_RESIZE:
                 deadline = None
+                continue
+            if key == ord("v") and not help_open:
+                if not page_starts:
+                    notice = "L'aperçu visuel est disponible pour les PDF."
+                    continue
+                clock.configure(False, not auto)
+                save(force=True)
+                def record_inspection(seconds):
+                    stats.seconds += seconds
+                    save()
+
+                try:
+                    inspect_pdf(screen, path, first_page, len(page_starts),
+                                getattr(args, "graphics", "auto"), on_time=record_inspection)
+                    notice = "Retour au passage sauvegardé."
+                except (OSError, ValueError) as error:
+                    notice = str(error)
+                    paused = True
+                    if zen:
+                        help_open, reference_open = True, True
+                finally:
+                    deadline = None
+                    clock.reset_passage()
+                    clock.tick()
+                    save(force=True)
                 continue
             if help_open:
                 if key in (curses.KEY_DOWN, curses.KEY_NPAGE, ord(" ")):
@@ -730,6 +759,7 @@ def main(argv=None):
     parser.add_argument("-w", "--wpm", type=positive, default=200, help="vitesse en mots/minute (défaut : 200)")
     parser.add_argument("-r", "--restart", action="store_true", help="reprendre au début")
     parser.add_argument("-z", "--zen", action="store_true", help="lecture sans en-tête ni compteurs (touche z)")
+    parser.add_argument("--graphics", choices=("auto", "kitty", "iterm", "sixels", "symbols"), default="auto", help="format d'aperçu PDF via Chafa (touche v)")
     parser.add_argument("--new-reading", action="store_true", help="commencer un nouveau cycle après avoir terminé le précédent")
     parser.add_argument("--readings", action="store_true", help="afficher les cycles de lecture du document")
     parser.add_argument("-e", "--encoding", default="utf-8-sig", help="encodage du texte (défaut : UTF-8)")

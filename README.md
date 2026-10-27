@@ -3,6 +3,7 @@
 Lecteur de texte, Markdown en aperçu et PDF pour macOS et les terminaux Unix, avec
 reprise automatique et barre de progression. Python **3.10 ou supérieur** suffit
 pour le texte. Pour les PDF, installez Poppler : `brew install poppler`.
+L'aperçu visuel facultatif utilise aussi Chafa : `brew install chafa`.
 
 ## Installer sur un autre Mac
 
@@ -168,6 +169,7 @@ Toutes les anciennes formes restent acceptées. Par exemple,
 | `-p` | `--status` | Progression en JSON |
 | `-h` | `--help` | Aide |
 | `-z` | `--zen` | Démarrer en lecture épurée |
+| — | `--graphics` | Format de l'aperçu PDF via Chafa |
 | — | `--new-reading` | Commencer le cycle suivant après la fin du précédent |
 | — | `--readings` | Afficher les cycles du document et leurs durées |
 
@@ -187,6 +189,7 @@ Toutes les anciennes formes restent acceptées. Par exemple,
 | `N` (majuscule) | Commencer une nouvelle lecture après avoir terminé |
 | `z` | Activer / quitter ZEN |
 | `i` | Consulter la référence de page PDF ou de ligne source |
+| `v` | Ouvrir la page PDF comme image dans le terminal |
 | `q`, Échap | Sauvegarder et quitter |
 
 Le retour retrouve les passages visités pendant la session. Après réouverture,
@@ -353,7 +356,7 @@ position à 100 % est importée comme une fin historique unique, sans dates de
 début/fin inventées. Le JSON de `-p` expose `reading_number`,
 `completed_readings` et `completed_rereadings`.
 
-### Prototype de références pour les contenus complexes
+### Pages PDF et aperçu visuel des contenus complexes
 
 Pour les PDF, Reader conserve maintenant les limites des pages transmises par
 `pdftotext`. Le bas de l'écran indique la page physique ou l'intervalle de pages
@@ -361,8 +364,64 @@ du passage affiché. La touche `i` fournit la référence et le chemin du docume
 sans perdre la position. Dans un Markdown ou un texte, elle indique la ligne
 du source, y compris en aperçu Markdown.
 
-**Ce prototype fournit un repère, pas une reconnaissance de figures.** Il
-n'extrait et n'affiche pas encore les images, tableaux, graphes ou formules.
+**Ce prototype affiche la page originale entière, sans reconnaissance des objets.**
+La touche `v` rend sa mise en page avec Poppler, puis l'affiche avec Chafa dans
+le même terminal : figures, tableaux et formules restent à leur emplacement.
+Si le passage couvre plusieurs pages, l'aperçu commence à la première ; vous
+pouvez consulter la suivante sans avancer votre position de lecture.
+
+```sh
+brew install poppler chafa
+./reader "document.pdf"
+```
+
+| Touche dans l'aperçu | Action |
+| --- | --- |
+| `+`, `-` | Zoomer / dézoomer, jusqu'à ×4 |
+| Flèches | Déplacer la zone agrandie |
+| `0` | Revenir à la page entière |
+| `n`, `b` | Page suivante / précédente, sans modifier la lecture |
+| `p` | Suspendre / reprendre le compteur d'inspection |
+| `v`, Échap ou `q` | Fermer l'aperçu et retrouver le passage exact |
+
+L'automatique est suspendu pendant l'aperçu et reprend avec un nouveau délai
+à sa fermeture. Le temps d'inspection est ajouté au temps consacré au document,
+y compris si la lecture du texte était en pause avant l'ouverture ; `p` dans
+l'aperçu permet de l'interrompre. Le temps de calcul et de préparation de l'image
+est exclu. L'inspection ne calibre pas le rythme de lecture du texte,
+ne termine aucun cycle et ne fait pas progresser le pourcentage.
+
+Sur un terminal reconnu comme compatible, le mode automatique sélectionne un
+format d'image. Sinon il utilise explicitement le mode **symboles**, approximation
+qui peut rendre les petits détails illisibles. La sélection repose sur les
+variables d'environnement, sans interrogation du terminal ; sous un multiplexeur,
+elle reste conservative. Un terminal compatible et correctement configuré est
+nécessaire pour voir les images en pixels. Les formats pris en charge sont
+décrits dans le [manuel de Chafa](https://hpjansson.org/chafa/man/).
+
+Pour choisir le protocole explicitement si la détection ne convient pas :
+
+```sh
+./reader "document.pdf" --graphics iterm
+./reader "document.pdf" --graphics kitty
+./reader "document.pdf" --graphics sixels
+./reader "document.pdf" --graphics symbols
+```
+
+Le format forcé doit être pris en charge par le terminal. Les transferts via
+SSH et les multiplexeurs demandent une vérification de la configuration.
+Les protocoles Kitty et iTerm ont été testés à l'encodage ; leur affichage réel
+dans chaque terminal doit encore être validé sur les machines d'utilisation.
+
+La première image de chaque page est conservée sous
+`~/.cache/reader/pdf/`, ou `$XDG_CACHE_HOME/reader/pdf/`. Le cache utilise
+l'empreinte du **fichier PDF complet**, incluant ses images ; les recadrages de
+zoom sont temporaires. Il est régénérable, sans lien avec la base de progression,
+et peut être supprimé après fermeture du lecteur. Un rendu ou un appel à Chafa
+dépassant 30 secondes retourne une erreur et laisse la lecture en pause.
+Ce prototype prépare la page de manière synchrone : une touche de retour est
+traitée à la fin de la préparation. Aucun OCR ni LLM n'est appelé.
+
 La page indiquée localise le passage courant ; elle n'atteste pas qu'un objet
 complexe s'y trouve. Le numéro physique commence à 1 et peut différer du numéro
 imprimé dans le livre. Les pages sans texte entre deux pages restent comptées.
@@ -370,8 +429,8 @@ Les PDF entièrement scannés nécessitent toujours un OCR préalable.
 
 `-p` expose `pdf_page` et `pdf_pages` pour un PDF, sinon `null`. Ces champs
 concernent le début du passage sauvegardé, indépendamment de la taille de fenêtre.
-Ce socle permet de préparer ensuite un rendu visuel ciblé sans engager dès
-maintenant une extraction universelle des contenus complexes.
+Le rendu reste limité aux pages PDF : pas d'images Markdown ni de conversion
+sémantique des tableaux ou formules pour le moment.
 
 ### Stockage et reprise
 
@@ -420,8 +479,8 @@ La [feuille de route des documents enrichis](FEUILLE-DE-ROUTE.md) organise les
 demandes de mode ZEN, relectures complètes, images, graphes, tableaux, formules,
 pas de progression, colonne LLM et voix de lecture. Elle précise les priorités,
 les dépendances et les limites des solutions envisagées. Le mode ZEN, les cycles
-et un prototype de références de page sont désormais disponibles ; le rendu
-graphique et les autres enrichissements restent à développer.
+et un aperçu visuel des pages PDF sont désormais disponibles ; les images
+Markdown et les autres enrichissements restent à développer.
 
 Le [rapport sur la lecture assidue et l'apprentissage durable](RAPPORT-LECTURE-APPRENTISSAGE.md)
 réunit les recherches consultées, leurs limites et les fonctions envisagées :

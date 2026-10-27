@@ -1,9 +1,9 @@
 # Reader : documents enrichis, relectures et lecture ZEN
 
 Compte rendu des demandes du 27 octobre 2026. **Première livraison : ZEN,
-cycles de lecture et références de page PDF** ; les autres fonctions restent
-des propositions à développer. Le prototype de références ne détecte ni
-n'affiche encore les objets complexes. Ce document complète le
+cycles de lecture, références et aperçu visuel de page PDF** ; les autres fonctions restent
+des propositions à développer. L'aperçu affiche la page entière avec Poppler et
+Chafa ; il ne détecte ni n'interprète les objets complexes. Ce document complète le
 [rapport sur l'apprentissage](RAPPORT-LECTURE-APPRENTISSAGE.md).
 
 ## 1. Intentions retenues
