@@ -22,9 +22,8 @@ import time
 import unicodedata
 
 
-# Marcel Proust, Journées de lecture, Pastiches et Mélanges (1919).
-# https://fr.wikisource.org/wiki/Journ%C3%A9es_de_lecture
-READING_QUOTE = "« La lecture est une amitié. » — Marcel Proust"
+# Devise de Reader choisie par l'utilisateur, sans attribution à un auteur.
+READING_QUOTE = "Lire, c’est conquérir le monde."
 
 
 def state_path():

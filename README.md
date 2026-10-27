@@ -261,10 +261,10 @@ presque toute la fenêtre. Le mode, la vitesse et l'état de lecture sont indiqu
 en haut. L'aide complète est accessible avec `?` pour garder le bas de l'écran
 discret. Les petits terminaux utilisent une présentation compacte.
 
-Une citation discrète de Marcel Proust accompagne l'en-tête : « La lecture est
-une amitié. », extrait de [Journées de lecture](https://fr.wikisource.org/wiki/Journ%C3%A9es_de_lecture).
-Elle apparaît lorsque l'en-tête dispose d'assez de place pour l'afficher avec
-son attribution, sans empiéter sur le contenu ni les informations de lecture.
+La devise « Lire, c’est conquérir le monde. » accompagne discrètement l'en-tête.
+Choisie pour Reader, elle n'est attribuée à aucun auteur. Elle apparaît lorsque
+l'en-tête dispose d'assez de place, sans empiéter sur le contenu ni les
+informations de lecture.
 
 Une couleur cyan souligne les indications et la progression, sans changer la
 couleur de fond du terminal. Pour désactiver les couleurs :
