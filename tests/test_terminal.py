@@ -18,7 +18,7 @@ EXECUTABLE = str(Path(__file__).resolve().parents[1] / "reader")
 
 
 class TerminalTests(unittest.TestCase):
-    def session(self, args, actions, terminal_size=(24, 80)):
+    def session(self, args, actions, terminal_size=(24, 80), expect_progress=True):
         master, slave = pty.openpty()
         fcntl.ioctl(slave, termios.TIOCSWINSZ, struct.pack("HHHH", *terminal_size, 0, 0))
         original = termios.tcgetattr(slave)
@@ -49,7 +49,8 @@ class TerminalTests(unittest.TestCase):
             restored[3] &= ~pending
             original[3] &= ~pending
             self.assertEqual(restored, original)
-            self.assertIn(b"%", output)
+            if expect_progress:
+                self.assertIn(b"%", output)
             return bytes(output)
         finally:
             if process.poll() is None:
@@ -60,6 +61,41 @@ class TerminalTests(unittest.TestCase):
 
     def status(self, args):
         return json.loads(subprocess.check_output([EXECUTABLE, *args, "--status"], text=True))
+
+    def test_zen_hides_chrome_and_reference_returns_to_same_position(self):
+        with tempfile.TemporaryDirectory() as directory:
+            folder = Path(directory)
+            document = folder / "notes.txt"
+            document.write_text("Un passage paisible à lire.\n" * 20)
+            args = [str(document), "-S", str(folder / "state.sqlite3"), "-z"]
+            output = self.session(args, [(0.4, b"q")], expect_progress=False)
+            self.assertIn(b"Un passage paisible", output)
+            self.assertNotIn(b"%", output)
+            self.assertNotIn(b"notes.txt", output)
+            self.assertNotIn(b"Temps cumul", output)
+            output = self.session(args, [(0.4, b"i"), (0.2, b"\x1b"), (0.3, b"q")])
+            self.assertIn(b"Ligne source : 1", output)
+            self.assertEqual(self.status(args)["position"], 0)
+
+    def test_new_cycle_starts_only_after_completion(self):
+        with tempfile.TemporaryDirectory() as directory:
+            folder = Path(directory)
+            document = folder / "notes.txt"
+            document.write_text("Un court texte.")
+            args = [str(document), "-S", str(folder / "state.sqlite3")]
+            self.session(args, [(0.4, b"N"), (0.2, b"q")])
+            self.assertEqual(self.status(args)["reading_number"], 1)
+            self.assertEqual(self.status(args)["completed_readings"], 0)
+            self.session(args, [(0.4, b"n"), (0.2, b"q")])
+            self.assertEqual(self.status(args)["completed_readings"], 1)
+            self.session(args, [(0.4, b"N"), (0.2, b"q")])
+            status = self.status(args)
+            self.assertEqual(status["reading_number"], 2)
+            self.assertEqual(status["position"], 0)
+            self.assertEqual(status["completed_rereadings"], 0)
+            self.session(args, [(0.4, b"n"), (0.2, b"q")])
+            self.assertEqual(self.status(args)["completed_readings"], 2)
+            self.assertEqual(self.status(args)["completed_rereadings"], 1)
 
     def test_resume_scroll_and_completion(self):
         with tempfile.TemporaryDirectory() as directory:

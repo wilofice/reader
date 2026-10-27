@@ -50,6 +50,23 @@ un lien vers cet exécutable dans un répertoire de votre `PATH`.
 
 ## Modes de lecture
 
+### Lecture ZEN
+
+```sh
+./reader "notes.md" -z
+./reader "notes.md" -z -m w -s 80 -a -w 240
+```
+
+La touche `z` active ou quitte le mode ZEN : seul le contenu reste visible,
+sans en-tête, citation, barre ni compteurs. La position et le temps continuent
+à être sauvegardés. Les commandes habituelles restent actives ; `?` affiche
+temporairement l'aide et `i` la référence du passage, puis Échap revient à la
+lecture. L'aide et la consultation de référence suspendent le défilement et le
+comptage du temps. Quitter ZEN conserve la position, avec adaptation du passage
+à la nouvelle surface d'affichage.
+
+### Choisir le passage et le rythme
+
 Pour se concentrer sur un passage isolé, utilisez le **mode mots avec avance
 automatique** :
 
@@ -150,6 +167,9 @@ Toutes les anciennes formes restent acceptées. Par exemple,
 | `-H` | `--history` | Historique |
 | `-p` | `--status` | Progression en JSON |
 | `-h` | `--help` | Aide |
+| `-z` | `--zen` | Démarrer en lecture épurée |
+| — | `--new-reading` | Commencer le cycle suivant après la fin du précédent |
+| — | `--readings` | Afficher les cycles du document et leurs durées |
 
 ## Touches
 
@@ -164,6 +184,9 @@ Toutes les anciennes formes restent acceptées. Par exemple,
 | `j`, `k` | Réduire / augmenter le nombre de lignes ou de mots affichés |
 | `?` | Ouvrir / fermer l'aide, avec suspension de l'avance automatique |
 | `g` | Revenir au début |
+| `N` (majuscule) | Commencer une nouvelle lecture après avoir terminé |
+| `z` | Activer / quitter ZEN |
+| `i` | Consulter la référence de page PDF ou de ligne source |
 | `q`, Échap | Sauvegarder et quitter |
 
 Le retour retrouve les passages visités pendant la session. Après réouverture,
@@ -299,6 +322,59 @@ ligne transformée peut être légèrement décalée.
 
 ## Mémoire et progression
 
+### Lectures complètes et relectures
+
+Une ouverture du programme n'est pas une nouvelle lecture. Un **cycle** reste
+en cours entre les sessions jusqu'à la fin du document. Avancer après le dernier
+passage (ou attendre son délai en automatique) termine le cycle une seule fois.
+La touche `N`, à la fin, commence le suivant. Elle est refusée avant la fin.
+
+```sh
+./reader "notes.md" --readings
+./reader "notes.md" --new-reading
+```
+
+`--new-reading` nécessite un terminal interactif et un cycle précédent terminé.
+Le nouveau cycle repart au début ; le temps total du document est conservé et
+une nouvelle durée de cycle commence. Après deux cycles terminés, le bilan
+compte **2 lectures terminées, dont 1 relecture**. Le numéro du cycle est visible
+dans l'en-tête ; `i`, `--readings` et `-p` permettent de consulter le bilan.
+
+`g` et `--restart` reviennent au début **du même cycle** : ils ne créent pas de
+relecture et n'effacent pas les cycles terminés. Revoir des passages d'un cycle
+déjà terminé n'augmente pas son compteur ; ce temps supplémentaire reste dans
+le cumul général, sans modifier sa durée figée à la fin. Les cycles sont
+distingués par chemin et empreinte du texte ; les compteurs concernent la version
+actuelle du texte. Les anciennes versions restent conservées dans la base.
+
+La migration conserve les positions et durées existantes. Le temps antérieur au
+suivi des cycles n'est pas attribué artificiellement à une lecture. Une ancienne
+position à 100 % est importée comme une fin historique unique, sans dates de
+début/fin inventées. Le JSON de `-p` expose `reading_number`,
+`completed_readings` et `completed_rereadings`.
+
+### Prototype de références pour les contenus complexes
+
+Pour les PDF, Reader conserve maintenant les limites des pages transmises par
+`pdftotext`. Le bas de l'écran indique la page physique ou l'intervalle de pages
+du passage affiché. La touche `i` fournit la référence et le chemin du document,
+sans perdre la position. Dans un Markdown ou un texte, elle indique la ligne
+du source, y compris en aperçu Markdown.
+
+**Ce prototype fournit un repère, pas une reconnaissance de figures.** Il
+n'extrait et n'affiche pas encore les images, tableaux, graphes ou formules.
+La page indiquée localise le passage courant ; elle n'atteste pas qu'un objet
+complexe s'y trouve. Le numéro physique commence à 1 et peut différer du numéro
+imprimé dans le livre. Les pages sans texte entre deux pages restent comptées.
+Les PDF entièrement scannés nécessitent toujours un OCR préalable.
+
+`-p` expose `pdf_page` et `pdf_pages` pour un PDF, sinon `null`. Ces champs
+concernent le début du passage sauvegardé, indépendamment de la taille de fenêtre.
+Ce socle permet de préparer ensuite un rendu visuel ciblé sans engager dès
+maintenant une extraction universelle des contenus complexes.
+
+### Stockage et reprise
+
 La position est enregistrée à chaque déplacement dans
 `~/.local/state/reader/reading.sqlite3`, ou sous `$XDG_STATE_HOME/reader/`
 si cette variable est définie. Aucun service ni connexion réseau n'est utilisé.
@@ -343,7 +419,9 @@ aussi un vrai PDF si Poppler est disponible ; sinon ce test est ignoré.
 La [feuille de route des documents enrichis](FEUILLE-DE-ROUTE.md) organise les
 demandes de mode ZEN, relectures complètes, images, graphes, tableaux, formules,
 pas de progression, colonne LLM et voix de lecture. Elle précise les priorités,
-les dépendances et les limites des solutions envisagées.
+les dépendances et les limites des solutions envisagées. Le mode ZEN, les cycles
+et un prototype de références de page sont désormais disponibles ; le rendu
+graphique et les autres enrichissements restent à développer.
 
 Le [rapport sur la lecture assidue et l'apprentissage durable](RAPPORT-LECTURE-APPRENTISSAGE.md)
 réunit les recherches consultées, leurs limites et les fonctions envisagées :

@@ -1,7 +1,9 @@
 # Reader : documents enrichis, relectures et lecture ZEN
 
-Compte rendu des demandes du 27 octobre 2026. **Statut : propositions à
-développer**, et non fonctionnalités disponibles. Ce document complète le
+Compte rendu des demandes du 27 octobre 2026. **Première livraison : ZEN,
+cycles de lecture et références de page PDF** ; les autres fonctions restent
+des propositions à développer. Le prototype de références ne détecte ni
+n'affiche encore les objets complexes. Ce document complète le
 [rapport sur l'apprentissage](RAPPORT-LECTURE-APPRENTISSAGE.md).
 
 ## 1. Intentions retenues
@@ -262,5 +264,5 @@ images à la fermeture d'une vue, le panneau LLM lent ou indisponible, la pause
 audio, le passage en ZEN et les migrations de mémoire. Les relectures doivent
 avoir des tests dédiés empêchant un nouveau cycle avant la fin du précédent.
 
-Ce document n'ajoute aucune commande ni fonctionnalité au programme. Les
-options et raccourcis futurs seront définis lors de chaque implémentation.
+Les commandes disponibles de la première livraison sont documentées dans le
+README. Les autres options et raccourcis seront définis à leur implémentation.

@@ -2,7 +2,7 @@
 """Lecteur de terminal avec reprise automatique (Python 3.10+)."""
 
 import argparse
-from bisect import bisect_left
+from bisect import bisect_left, bisect_right
 import curses
 from dataclasses import dataclass
 import hashlib
@@ -49,6 +49,34 @@ class Memory:
             if name not in columns:
                 self.db.execute(f"ALTER TABLE documents ADD COLUMN {name} {definition}")
         self.db.commit()
+        self.db.execute("""CREATE TABLE IF NOT EXISTS reading_cycles (
+            path TEXT NOT NULL, digest TEXT NOT NULL, number INTEGER NOT NULL,
+            started TEXT, finished TEXT, completed INTEGER NOT NULL DEFAULT 0,
+            historical INTEGER NOT NULL DEFAULT 0, seconds REAL NOT NULL DEFAULT 0,
+            base_seconds REAL NOT NULL DEFAULT 0,
+            PRIMARY KEY (path, digest, number))""")
+        self.db.commit()
+
+    def cycles(self, path, text):
+        digest = hashlib.sha256(text.encode("utf-8")).hexdigest()
+        return self.db.execute("""SELECT number, completed, seconds, historical, started, finished
+            FROM reading_cycles WHERE path = ? AND digest = ? ORDER BY number""",
+            (str(path), digest)).fetchall()
+
+    def new_reading(self, path, text):
+        digest = hashlib.sha256(text.encode("utf-8")).hexdigest()
+        if not self.cycles(path, text):
+            old = self.db.execute("SELECT digest, position, length FROM documents WHERE path = ?", (str(path),)).fetchone()
+            if old and old[0] == digest and old[1] >= old[2]:
+                self.save(path, text, len(text))
+        with self.db:
+            rows = self.cycles(path, text)
+            if not rows or not rows[-1][1]:
+                raise ValueError("Terminez la lecture en cours avant de commencer la suivante.")
+            seconds = self.db.execute("SELECT reading_seconds FROM documents WHERE path = ?", (str(path),)).fetchone()[0]
+            self.db.execute("""INSERT INTO reading_cycles (path, digest, number, started, base_seconds)
+                VALUES (?, ?, ?, datetime('now'), ?)""", (str(path), digest, rows[-1][0] + 1, seconds))
+            self.db.execute("UPDATE documents SET position = 0 WHERE path = ?", (str(path),))
 
     def resume(self, path, text):
         row = self.db.execute("SELECT digest, position FROM documents WHERE path = ?", (str(path),)).fetchone()
@@ -70,6 +98,14 @@ class Memory:
     def save(self, path, text, position, stats=None):
         digest = hashlib.sha256(text.encode("utf-8")).hexdigest()
         with self.db:
+            old = self.db.execute("SELECT digest, position, length, reading_seconds FROM documents WHERE path = ?", (str(path),)).fetchone()
+            if not self.cycles(path, text):
+                historical = bool(old and old[0] == digest and old[1] >= old[2])
+                base = old[3] if old else 0
+                self.db.execute("""INSERT INTO reading_cycles
+                    (path, digest, number, started, completed, historical, base_seconds)
+                    VALUES (?, ?, 1, CASE WHEN ? THEN NULL ELSE datetime('now') END, ?, ?, ?)""",
+                    (str(path), digest, historical, historical, historical, base))
             self.db.execute("""INSERT INTO documents (path, digest, position, length, updated)
                 VALUES (?, ?, ?, ?, datetime('now'))
                 ON CONFLICT(path) DO UPDATE SET digest=excluded.digest,
@@ -79,6 +115,12 @@ class Memory:
                 self.db.execute("""UPDATE documents SET reading_seconds = ?, manual_words = ?,
                     manual_seconds = ?, manual_digest = ? WHERE path = ?""",
                     (stats.seconds, stats.manual_words, stats.manual_seconds, stats.manual_digest, str(path)))
+            total = stats.seconds if stats is not None else (old[3] if old else 0)
+            self.db.execute("""UPDATE reading_cycles SET seconds = MAX(0, ? - base_seconds),
+                completed = ?, finished = CASE WHEN ? THEN datetime('now') ELSE NULL END
+                WHERE path = ? AND digest = ? AND completed = 0
+                AND number = (SELECT MAX(number) FROM reading_cycles WHERE path = ? AND digest = ?)""",
+                (total, position >= len(text), position >= len(text), str(path), digest, str(path), digest))
 
     def history(self):
         return self.db.execute("SELECT path, position, length, updated, reading_seconds FROM documents ORDER BY updated DESC").fetchall()
@@ -173,7 +215,12 @@ def duration(seconds, rounded_up=False):
     return f"{hours:d}:{minutes:02d}:{seconds:02d}" if hours else f"{minutes:02d}:{seconds:02d}"
 
 
-def load_document(path, encoding):
+def normalize_text(text):
+    text = text.replace("\r\n", "\n").replace("\r", "\n").replace("\f", "\n\n").expandtabs(4)
+    return "".join(c for c in text if c == "\n" or not unicodedata.category(c).startswith("C"))
+
+
+def load_document(path, encoding, with_pages=False):
     if path.suffix.lower() == ".pdf":
         if not shutil.which("pdftotext"):
             raise ValueError("PDF : installez Poppler avec `brew install poppler`.")
@@ -187,11 +234,19 @@ def load_document(path, encoding):
     else:
         text = path.read_text(encoding=encoding)
     # Stable offsets refer to this normalized text, not PDF pages or source bytes.
-    text = text.replace("\r\n", "\n").replace("\r", "\n").replace("\f", "\n\n").expandtabs(4)
-    text = "".join(c for c in text if c in "\n" or not unicodedata.category(c).startswith("C"))
+    page_starts = []
+    if path.suffix.lower() == ".pdf":
+        cursor = 0
+        parts = text.split("\f")
+        for index, part in enumerate(parts):
+            if index == len(parts) - 1 and not part.strip() and len(parts) > 1:
+                break
+            page_starts.append(cursor)
+            cursor += len(normalize_text(part)) + 2
+    text = normalize_text(text)
     if not text.strip():
         raise ValueError("Aucun texte lisible. Un PDF scanné nécessite une reconnaissance OCR préalable.")
-    return text
+    return (text, page_starts) if with_pages else text
 
 
 class PreviewHTML(HTMLParser):
@@ -390,7 +445,7 @@ def terminal_accent():
     return curses.A_BOLD
 
 
-def run_ui(screen, text, path, memory, args, position, changed, source=None, offsets=None, stats=None):
+def run_ui(screen, text, path, memory, args, position, changed, source=None, offsets=None, stats=None, page_starts=None):
     source = text if source is None else source
     stats = stats if stats is not None else memory.timing(path, text, changed)
     clock = ReadingClock(stats)
@@ -415,6 +470,8 @@ def run_ui(screen, text, path, memory, args, position, changed, source=None, off
     last_save_time = time.monotonic()
     last_layout = None
     help_open = False
+    reference_open = False
+    zen = getattr(args, "zen", False)
     help_offset = 0
     help_lines = [
         "Raccourcis de lecture", "",
@@ -426,6 +483,9 @@ def run_ui(screen, text, path, memory, args, position, changed, source=None, off
         "j / k             Réduire / augmenter le passage",
         "+ / -             Accélérer / ralentir de 25 mots/min",
         "g                 Revenir au début",
+        "z                 Activer / quitter ZEN",
+        "i                 Référence de page ou ligne source",
+        "N                 Nouvelle lecture après la fin",
         "q                 Sauvegarder et quitter", "",
         "[ et ] règlent aussi la taille du passage.",
         "Police plus grande : utilisez le zoom du terminal.",
@@ -446,7 +506,9 @@ def run_ui(screen, text, path, memory, args, position, changed, source=None, off
             height, width = screen.getmaxyx()
             screen.erase()
 
-            def put(y, value, style=0, x=0):
+            def put(y, value, style=0, x=0, chrome=True):
+                if zen and not help_open and chrome:
+                    return
                 if 0 <= y < height:
                     try:
                         screen.addstr(y, x, clipped(value, max(0, width - x - 1)), style)
@@ -455,8 +517,8 @@ def run_ui(screen, text, path, memory, args, position, changed, source=None, off
 
             if height < 8 or width < 35:
                 clock.configure(False, not auto)
-                put(0, "Agrandissez le terminal (35 × 8 min).")
-                put(1, "q : quitter et sauvegarder")
+                put(0, "Agrandissez le terminal (35 × 8 min).", chrome=False)
+                put(1, "q : quitter et sauvegarder", chrome=False)
                 screen.refresh()
                 key = screen.getch()
                 deadline = None
@@ -467,6 +529,8 @@ def run_ui(screen, text, path, memory, args, position, changed, source=None, off
             spacious = height >= 14
             body_start = 5 if spacious else 3
             body_height = height - body_start - 4
+            if zen and not help_open:
+                body_start, body_height = 2, height - 4
             body_width = min(76, width - 6)
             body_left = (width - body_width) // 2
             layout = (body_height, body_width)
@@ -489,7 +553,16 @@ def run_ui(screen, text, path, memory, args, position, changed, source=None, off
                 words_index, position, stats, auto, speed, step,
                 None if deadline is None else deadline - time.monotonic(),
             )
+            page_label = ""
+            if page_starts:
+                first_page = min(len(page_starts), bisect_right(page_starts, source_position()))
+                source_end = offsets[end] if offsets is not None else end
+                last_page = min(len(page_starts), bisect_right(page_starts, max(source_position(), source_end - 1)))
+                page_label = str(first_page) if first_page == last_page else f"{first_page}–{last_page}"
 
+            cycles = memory.cycles(path, source)
+            completed = sum(row[1] for row in cycles)
+            cycle_number = cycles[-1][0] if cycles else 1
             put(0, path.name, curses.A_BOLD, x=2)
             mode_label = {"lines": "Lignes", "words": "Mots", "scroll": "Défilement"}[args.mode]
             reading_state = "Lecture terminée" if done else "En pause · aide" if help_open else "En pause" if paused else "Lecture automatique" if auto else "Lecture manuelle"
@@ -505,6 +578,7 @@ def run_ui(screen, text, path, memory, args, position, changed, source=None, off
             unit = "mots" if args.mode == "words" else "lignes"
             if spacious:
                 setting = f"Passage : {args.size} {unit}"
+                setting += f" · Lecture {cycle_number}"
                 hint = "    j réduire · k augmenter"
                 quote_width = sum(map(cell_width, READING_QUOTE))
                 quote_x = width - 2 - quote_width
@@ -516,18 +590,30 @@ def run_ui(screen, text, path, memory, args, position, changed, source=None, off
                     put(2, READING_QUOTE, curses.A_DIM, x=quote_x)
             put(body_start - 2 if spacious else 2, "─" * (width - 4), curses.A_DIM, x=2)
             if help_open:
-                help_text = "\n".join(help_lines)
+                info = ["Référence du passage", "", str(path)]
+                if page_starts:
+                    info += [f"Page(s) PDF : {page_label} / {len(page_starts)} (index physique)",
+                             "Le numéro imprimé sur la page peut être différent.",
+                             "Prototype : référence de page, sans détection des objets."]
+                else:
+                    info += [f"Ligne source : {source.count(chr(10), 0, source_position()) + 1}"]
+                info += ["", f"Lecture {cycle_number} · {completed} terminée(s)",
+                         f"Relectures terminées : {max(0, completed - 1)}",
+                         "", "i / ? / Échap : revenir au passage"]
+                help_text = "\n".join(info if reference_open else help_lines)
                 help_view = [row[2] for row in rows(help_text, 0, len(help_text), body_width, len(help_text))]
                 help_offset = min(help_offset, max(0, len(help_view) - body_height))
                 for index, line in enumerate(help_view[help_offset:help_offset + body_height]):
                     put(body_start + index, line, curses.A_BOLD if help_offset + index == 0 else 0, x=body_left)
             else:
                 for index, (_, _, line) in enumerate(visible):
-                    put(body_start + index, line, x=body_left)
+                    put(body_start + index, line, x=body_left, chrome=False)
                 if done:
-                    put(body_start, "Lecture terminée.", curses.A_BOLD, x=body_left)
+                    put(body_start, "Fin de lecture. N : relire.", curses.A_BOLD, x=body_left, chrome=False)
                     if body_height > 1:
-                        put(body_start + 1, "g : relire · b : revenir", x=body_left)
+                        put(body_start + 1, "g / b : revoir dans ce cycle", x=body_left, chrome=False)
+            if page_starts and not help_open:
+                put(height - 2, notice or f"Page(s) PDF {page_label}/{len(page_starts)} · i : référence", curses.A_DIM)
             fraction = source_position() / len(source)
             bar_width = width - 10
             filled, remainder = divmod(int(bar_width * 8 * fraction), 8)
@@ -544,13 +630,15 @@ def run_ui(screen, text, path, memory, args, position, changed, source=None, off
                 put(height - 2, "↑/↓ : défiler · ?/Échap : retour")
                 put(height - 1, "Lecture suspendue pendant l'aide", curses.A_DIM)
             else:
-                put(height - 2, notice or "n suite · b retour · espace suite/pause", curses.A_DIM)
-                put(height - 1, "p pause · j/k taille · ? aide · q quitter" if width >= 55 else "p pause · ? aide · q quitter")
+                if not page_starts:
+                    put(height - 2, notice or "n suite · b retour · espace suite/pause", curses.A_DIM)
+                put(height - 1, "p pause · z ZEN · i référence · ? aide · q quitter" if width >= 55 else "z ZEN · ? aide · q quitter")
             screen.refresh()
             key = screen.getch()
             clock.tick()
             advance = False
-            if key == ord("?") or (help_open and key == 27):
+            if key in (ord("?"), ord("i")) or (help_open and key == 27):
+                reference_open = key == ord("i") and not help_open
                 help_open = not help_open
                 help_offset = 0
                 deadline = None
@@ -565,6 +653,20 @@ def run_ui(screen, text, path, memory, args, position, changed, source=None, off
                     help_offset = min(max(0, len(help_view) - body_height), help_offset + 1)
                 elif key in (curses.KEY_UP, curses.KEY_PPAGE):
                     help_offset = max(0, help_offset - 1)
+                continue
+            if key == ord("z"):
+                zen = not zen
+                deadline = None
+                continue
+            if key == ord("N"):
+                if done:
+                    save(force=True)
+                    memory.new_reading(path, source)
+                    position, stack, deadline = 0, [], None
+                    auto, paused = args.auto or args.mode == "scroll", False
+                    clock.reset_passage()
+                else:
+                    notice = "Terminez cette lecture avant d'en commencer une autre."
                 continue
             if key in (ord("n"), curses.KEY_RIGHT, curses.KEY_DOWN, 10, 13):
                 advance = True
@@ -627,6 +729,9 @@ def main(argv=None):
     parser.add_argument("-a", "--auto", action="store_true", help="avancer automatiquement")
     parser.add_argument("-w", "--wpm", type=positive, default=200, help="vitesse en mots/minute (défaut : 200)")
     parser.add_argument("-r", "--restart", action="store_true", help="reprendre au début")
+    parser.add_argument("-z", "--zen", action="store_true", help="lecture sans en-tête ni compteurs (touche z)")
+    parser.add_argument("--new-reading", action="store_true", help="commencer un nouveau cycle après avoir terminé le précédent")
+    parser.add_argument("--readings", action="store_true", help="afficher les cycles de lecture du document")
     parser.add_argument("-e", "--encoding", default="utf-8-sig", help="encodage du texte (défaut : UTF-8)")
     parser.add_argument("-R", "--raw", action="store_true", help="afficher le code source des fichiers Markdown au lieu de l'aperçu")
     parser.add_argument("-S", "--state", type=Path, default=state_path(), help="chemin de la base SQLite")
@@ -635,6 +740,8 @@ def main(argv=None):
     args = parser.parse_args(argv)
     args.mode = {"l": "lines", "w": "words", "s": "scroll"}.get(args.mode, args.mode)
     args.size = args.size or (120 if args.mode == "words" else 15)
+    if args.new_reading and (args.restart or args.status or args.history or args.readings):
+        parser.error("--new-reading s'utilise seul avec les options de lecture")
     if not args.file and not args.history:
         parser.error("indiquez un fichier ou --history")
     memory = None
@@ -645,8 +752,22 @@ def main(argv=None):
                 print(f"{position / max(1, length):6.1%}  lu {duration(seconds)}  {updated} UTC  {path}")
             return 0
         path = args.file.expanduser().resolve(strict=True)
-        source = load_document(path, args.encoding)
+        source, page_starts = load_document(path, args.encoding, with_pages=True)
         source_position, changed = memory.resume(path, source)
+        if args.new_reading:
+            if not sys.stdin.isatty() or not sys.stdout.isatty():
+                raise ValueError("--new-reading nécessite un terminal interactif.")
+            memory.new_reading(path, source)
+            source_position = 0
+        cycles = memory.cycles(path, source)
+        completed = sum(row[1] for row in cycles)
+        if args.readings:
+            for number, complete, seconds, historical, started, finished in cycles:
+                label = "terminée" if complete else "en cours"
+                print(f"Lecture {number} · {label} · {duration(seconds)}" + (" · fin importée, durée historique non attribuée" if historical else ""))
+            if not cycles:
+                print("Aucun cycle enregistré ; ouvrez le document pour commencer.")
+            return 0
         text, offsets = source, None
         position = source_position
         if path.suffix.lower() in (".md", ".markdown", ".mdown") and not args.raw:
@@ -664,6 +785,10 @@ def main(argv=None):
                 reading_seconds=round(stats.seconds, 2), remaining_words=words.count(position),
                 estimated_remaining_seconds=None if seconds is None else round(seconds, 1),
                 estimate_basis=basis, estimated_wpm=None if rate is None else round(rate, 1),
+                reading_number=cycles[-1][0] if cycles else 1,
+                completed_readings=completed, completed_rereadings=max(0, completed - 1),
+                pdf_page=min(len(page_starts), bisect_right(page_starts, source_position)) if page_starts else None,
+                pdf_pages=len(page_starts) if page_starts else None,
             ), ensure_ascii=False))
             return 0
         if not sys.stdin.isatty() or not sys.stdout.isatty():
@@ -671,7 +796,7 @@ def main(argv=None):
         locale.setlocale(locale.LC_ALL, "")
         terminal_settings = termios.tcgetattr(sys.stdin.fileno())
         try:
-            curses.wrapper(run_ui, text, path, memory, args, 0 if args.restart else position, changed, source, offsets, stats)
+            curses.wrapper(run_ui, text, path, memory, args, 0 if args.restart else position, changed, source, offsets, stats, page_starts)
         finally:
             termios.tcsetattr(sys.stdin.fileno(), termios.TCSADRAIN, terminal_settings)
         print(f"Position sauvegardée dans {args.state.expanduser()}")

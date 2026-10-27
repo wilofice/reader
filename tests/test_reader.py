@@ -16,6 +16,60 @@ loader.exec_module(reader)
 
 
 class ReadingTests(unittest.TestCase):
+    def test_cycles_require_completion_and_do_not_count_reopening(self):
+        with tempfile.TemporaryDirectory() as folder:
+            memory = reader.Memory(Path(folder) / "state.sqlite3")
+            path, text = Path(folder) / "notes.txt", "un deux trois"
+            try:
+                memory.save(path, text, 3)
+                with self.assertRaisesRegex(ValueError, "Terminez"):
+                    memory.new_reading(path, text)
+                memory.save(path, text, 3)
+                self.assertEqual(len(memory.cycles(path, text)), 1)
+                stats = memory.timing(path, text)
+                stats.seconds = 12
+                memory.save(path, text, len(text), stats)
+                memory.save(path, text, len(text), stats)
+                self.assertEqual(memory.cycles(path, text)[0][1:3], (1, 12))
+                memory.new_reading(path, text)
+                self.assertEqual(memory.resume(path, text), (0, False))
+                with self.assertRaises(ValueError):
+                    memory.new_reading(path, text)
+                stats.seconds = 30
+                memory.save(path, text, len(text), stats)
+                rows = memory.cycles(path, text)
+                self.assertEqual([row[2] for row in rows], [12, 18])
+                self.assertEqual(sum(row[1] for row in rows), 2)
+                self.assertEqual(memory.cycles(path, "autre version"), [])
+                self.assertEqual(memory.timing(path, text).seconds, 30)
+            finally:
+                memory.close()
+
+    def test_old_completed_position_imports_one_historical_cycle(self):
+        with tempfile.TemporaryDirectory() as folder:
+            memory = reader.Memory(Path(folder) / "state.sqlite3")
+            path, text = Path(folder) / "notes.txt", "terminé"
+            try:
+                memory.db.execute("INSERT INTO documents (path,digest,position,length,updated,reading_seconds) VALUES (?,?,?,?,datetime('now'),99)",
+                                  (str(path), reader.hashlib.sha256(text.encode()).hexdigest(), len(text), len(text)))
+                memory.db.commit()
+                memory.new_reading(path, text)
+                rows = memory.cycles(path, text)
+                self.assertEqual(rows[0][:4], (1, 1, 0, 1))
+                self.assertIsNone(rows[0][4])
+                self.assertIsNone(rows[0][5])
+                self.assertEqual(rows[1][:3], (2, 0, 0))
+            finally:
+                memory.close()
+
+    def test_pdf_pages_preserve_normalized_offsets_and_empty_pages(self):
+        result = subprocess.CompletedProcess([], 0, b"First\n\f\fThird\n\f", b"")
+        with patch.object(reader.shutil, "which", return_value="pdftotext"), patch.object(reader.subprocess, "run", return_value=result):
+            text, starts = reader.load_document(Path("test.pdf"), "utf-8", with_pages=True)
+        self.assertEqual(text, "First\n\n\n\n\nThird\n\n\n")
+        self.assertEqual(starts, [0, 8, 10])
+        self.assertEqual(text[starts[2]:].split()[0], "Third")
+
     def test_short_cli_options_match_long_options(self):
         import contextlib
         import io
@@ -262,12 +316,15 @@ visible
     def test_real_pdf_extraction(self):
         # Minimal valid PDF, including its xref table, with selectable text.
         stream = b"BT /F1 18 Tf 50 750 Td (Reader PDF verification) Tj ET"
+        second = b"BT /F1 18 Tf 50 750 Td (Second page with formula x = 2) Tj ET"
         objects = [
             b"<< /Type /Catalog /Pages 2 0 R >>",
-            b"<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
+            b"<< /Type /Pages /Kids [3 0 R 6 0 R] /Count 2 >>",
             b"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 4 0 R >> >> /Contents 5 0 R >>",
             b"<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>",
             f"<< /Length {len(stream)} >>\nstream\n".encode() + stream + b"\nendstream",
+            b"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 4 0 R >> >> /Contents 7 0 R >>",
+            f"<< /Length {len(second)} >>\nstream\n".encode() + second + b"\nendstream",
         ]
         pdf = bytearray(b"%PDF-1.4\n")
         offsets = [0]
@@ -275,14 +332,29 @@ visible
             offsets.append(len(pdf))
             pdf.extend(f"{number} 0 obj\n".encode() + obj + b"\nendobj\n")
         xref = len(pdf)
-        pdf.extend(b"xref\n0 6\n0000000000 65535 f \n")
+        pdf.extend(f"xref\n0 {len(objects) + 1}\n0000000000 65535 f \n".encode())
         for offset in offsets[1:]:
             pdf.extend(f"{offset:010d} 00000 n \n".encode())
-        pdf.extend(f"trailer\n<< /Size 6 /Root 1 0 R >>\nstartxref\n{xref}\n%%EOF\n".encode())
+        pdf.extend(f"trailer\n<< /Size {len(objects) + 1} /Root 1 0 R >>\nstartxref\n{xref}\n%%EOF\n".encode())
         with tempfile.TemporaryDirectory() as folder:
             path = Path(folder) / "document test.pdf"
             path.write_bytes(pdf)
             self.assertIn("Reader PDF verification", reader.load_document(path, "utf-8"))
+            text, starts = reader.load_document(path, "utf-8", with_pages=True)
+            self.assertEqual(len(starts), 2)
+            self.assertIn("Second page with formula", text[starts[1]:])
+            memory = reader.Memory(Path(folder) / "state.sqlite3")
+            memory.save(path.resolve(), text, starts[1])
+            memory.close()
+            import contextlib
+            import io
+            import json
+            output = io.StringIO()
+            with contextlib.redirect_stdout(output):
+                self.assertEqual(reader.main([str(path), "-S", str(Path(folder) / "state.sqlite3"), "-p"]), 0)
+            status = json.loads(output.getvalue())
+            self.assertEqual(status["pdf_page"], 2)
+            self.assertEqual(status["pdf_pages"], 2)
 
     def test_pagination_never_loses_characters(self):
         text = "Début café 漢字\n\n" + "longmot" * 20 + "\n fin du texte\n"
