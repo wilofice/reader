@@ -340,6 +340,11 @@ aussi un vrai PDF si Poppler est disponible ; sinon ce test est ignoré.
 
 ## Recherche et évolutions proposées
 
+La [feuille de route des documents enrichis](FEUILLE-DE-ROUTE.md) organise les
+demandes de mode ZEN, relectures complètes, images, graphes, tableaux, formules,
+pas de progression, colonne LLM et voix de lecture. Elle précise les priorités,
+les dépendances et les limites des solutions envisagées.
+
 Le [rapport sur la lecture assidue et l'apprentissage durable](RAPPORT-LECTURE-APPRENTISSAGE.md)
 réunit les recherches consultées, leurs limites et les fonctions envisagées :
 préférences mémorisées, journal de séances, notes, rappel actif, révisions espacées
