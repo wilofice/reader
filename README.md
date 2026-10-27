@@ -157,7 +157,8 @@ Toutes les anciennes formes restent acceptées. Par exemple,
 | --- | --- |
 | `n`, Entrée, flèche droite/bas | Avancer |
 | `b`, flèche gauche/haut | Revenir et suspendre l'avance automatique |
-| Espace | Suspendre l'automatique ; avancer en lecture manuelle |
+| Espace | Pause / reprise en automatique ; avancer en manuel, ou reprendre si en pause |
+| `p` | Mettre en pause / reprendre dans tous les modes, y compris le comptage du temps |
 | `a` | Activer ou suspendre l'automatique |
 | `+`, `-` | Modifier la vitesse de 25 mots/minute |
 | `j`, `k` | Réduire / augmenter le nombre de lignes ou de mots affichés |
@@ -174,6 +175,83 @@ pas des éléments décoratifs de l'interface.
 Dans l'aide, les flèches haut/bas permettent de défiler si nécessaire ; `?` ou
 Échap revient à la lecture, et `q` quitte le lecteur. Si l'avance automatique
 était active, elle reprend avec un nouveau délai complet à la fermeture de l'aide.
+
+## Temps consacré et estimation du temps restant
+
+Une ligne au-dessus de la barre de progression affiche le **temps cumulé sur ce
+document** et le **temps restant estimé**, par exemple :
+
+```text
+Temps cumulé : 12:34 · Reste ≈ 08:20 auto
+```
+
+Les durées sont au format `minutes:secondes`, puis `heures:minutes:secondes`
+au-delà d'une heure. Le compteur se cumule entre les ouvertures du même fichier.
+Il compte le temps pendant lequel le texte est disponible à la lecture, en
+manuel comme en automatique. Il s'arrête pendant une pause, dans l'aide, quand
+la fenêtre est trop petite pour afficher le texte et après la fin du document.
+Les longues suspensions du processus entre deux mises à jour sont ignorées.
+
+**Appuyez sur `p` lorsque vous interrompez votre lecture**, même en manuel.
+Le programme ne sait pas si vous regardez encore le terminal : une fenêtre
+laissée ouverte sans pause peut donc continuer à compter. Ce compteur est une
+estimation du temps consacré, sans mesure de l'attention ni de la compréhension.
+Espace reprend une lecture en pause ; `n` avance et reprend aussi la lecture.
+
+| Mode | Calcul de l'estimation |
+| --- | --- |
+| Automatique (`-a` ou `-m s`) | Nombre de mots restant à afficher, divisé par la vitesse `-w` ; le délai du passage courant diminue pendant son affichage |
+| Manuel | Rythme observé sur les passages avancés avec `n`, Entrée, les flèches ou Espace, et le temps actif passé sur ces passages |
+| Manuel sans observations suffisantes | Affichage « calibrage », sans durée inventée à partir de la vitesse automatique |
+
+En manuel, le calibrage demande au moins **20 mots et 10 secondes cumulés sur
+des passages terminés**. Le rythme observé apparaît alors dans l'en-tête et
+sert à estimer la durée restante. Le temps passé sur le passage encore ouvert
+ne devient un échantillon qu'à son avancement : l'estimation manuelle est donc
+mise à jour par passage, et non par un compte à rebours artificiel.
+
+Les passages sautés en moins de 0,2 seconde ne servent pas au calibrage.
+Un retour en arrière, un changement de taille ou de fenêtre, ou un changement
+entre manuel et automatique écarte l'échantillon en cours pour éviter de
+mélanger des mesures incompatibles. Les échantillons suivants peuvent de nouveau
+être utilisés. Le temps total consacré reste compté même sans échantillon valide.
+Une navigation rapide ou une interruption non déclarée peut encore fausser le
+rythme observé : la durée affichée reste approximative.
+
+Les mots sont comptés dans le texte effectivement proposé à la lecture, donc
+dans l'aperçu pour un fichier Markdown. Les futures pauses, les relectures et
+les changements de vitesse ne peuvent pas être prédits. Le délai minimal de
+0,25 seconde et les passages sans mots peuvent aussi allonger l'automatique,
+particulièrement à grande vitesse ou avec des passages très courts.
+
+Le temps est sauvegardé à chaque déplacement, à la fermeture normale et environ
+toutes les cinq secondes. Une fermeture forcée peut perdre les dernières
+secondes non sauvegardées. Les anciennes bases sont mises à niveau en conservant
+les positions ; les temps commencent à zéro car les anciennes lectures ne
+contenaient aucune mesure de durée.
+
+`--restart` remet la position au début mais conserve le temps cumulé. Une
+modification du texte conserve aussi ce cumul, tout en remettant la position
+et le calibrage à zéro. Un changement entre source Markdown et aperçu remet
+le calibrage à zéro, sans effacer le temps consacré. Le cumul reste attaché au
+chemin du document, avec les limites de déplacement décrites plus bas.
+
+```sh
+# Voir le temps cumulé dans l'historique
+./reader -H
+
+# Statistiques et estimation fondée sur les observations manuelles
+./reader "notes.txt" -p
+
+# Estimation fondée sur un rythme automatique de 240 mots/minute
+./reader "notes.txt" -p -a -w 240
+```
+
+Le JSON de `-p` contient `reading_seconds`, `remaining_words`,
+`estimated_remaining_seconds`, `estimated_wpm` et `estimate_basis`. Ce dernier
+vaut `configured_speed` en automatique, `observed_manual_speed` après calibrage,
+`calibrating` avant calibrage, ou `complete` à la fin. Une estimation indisponible
+vaut `null`. Les statistiques ne font pas avancer la lecture.
 
 ## Lisibilité et aperçu Markdown
 
@@ -250,7 +328,9 @@ Les tests vérifient les positions persistantes, les changements de documents,
 le découpage sans perte, le rendu Markdown et l'extraction PDF simulée. Les tests
 en pseudo-terminal vérifient les touches, le changement de taille, la reprise,
 la pause pendant l'aide, l'affichage compact, le défilement, la fin de lecture
-et la restauration du terminal. Un test extrait
+et la restauration du terminal. Ils couvrent aussi la migration des anciennes
+bases, le temps cumulé, les pauses et les estimations automatiques et manuelles.
+Un test extrait
 aussi un vrai PDF si Poppler est disponible ; sinon ce test est ignoré.
 
 ## Recherche et évolutions proposées

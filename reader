@@ -4,9 +4,11 @@
 import argparse
 from bisect import bisect_left
 import curses
+from dataclasses import dataclass
 import hashlib
 import json
 import locale
+import math
 from html.parser import HTMLParser
 import os
 from pathlib import Path
@@ -33,6 +35,15 @@ class Memory:
         self.db.execute("""CREATE TABLE IF NOT EXISTS documents (
             path TEXT PRIMARY KEY, digest TEXT NOT NULL, position INTEGER NOT NULL,
             length INTEGER NOT NULL, updated TEXT NOT NULL)""")
+        columns = {row[1] for row in self.db.execute("PRAGMA table_info(documents)")}
+        for name, definition in (
+            ("reading_seconds", "REAL NOT NULL DEFAULT 0"),
+            ("manual_words", "INTEGER NOT NULL DEFAULT 0"),
+            ("manual_seconds", "REAL NOT NULL DEFAULT 0"),
+            ("manual_digest", "TEXT NOT NULL DEFAULT ''"),
+        ):
+            if name not in columns:
+                self.db.execute(f"ALTER TABLE documents ADD COLUMN {name} {definition}")
         self.db.commit()
 
     def resume(self, path, text):
@@ -41,19 +52,121 @@ class Memory:
         changed = row is not None and row[0] != digest
         return (min(max(row[1], 0), len(text)) if row and not changed else 0), changed
 
-    def save(self, path, text, position):
+    def timing(self, path, displayed_text, changed=False):
+        row = self.db.execute("""SELECT reading_seconds, manual_words, manual_seconds,
+            manual_digest FROM documents WHERE path = ?""", (str(path),)).fetchone()
+        digest = hashlib.sha256(displayed_text.encode("utf-8")).hexdigest()
+        stats = ReadingStats(manual_digest=digest)
+        if row:
+            stats.seconds = row[0]
+            if row[3] == digest and not changed:
+                stats.manual_words, stats.manual_seconds = row[1], row[2]
+        return stats
+
+    def save(self, path, text, position, stats=None):
         digest = hashlib.sha256(text.encode("utf-8")).hexdigest()
         with self.db:
-            self.db.execute("""INSERT INTO documents VALUES (?, ?, ?, ?, datetime('now'))
+            self.db.execute("""INSERT INTO documents (path, digest, position, length, updated)
+                VALUES (?, ?, ?, ?, datetime('now'))
                 ON CONFLICT(path) DO UPDATE SET digest=excluded.digest,
                 position=excluded.position, length=excluded.length, updated=excluded.updated""",
                 (str(path), digest, position, len(text)))
+            if stats is not None:
+                self.db.execute("""UPDATE documents SET reading_seconds = ?, manual_words = ?,
+                    manual_seconds = ?, manual_digest = ? WHERE path = ?""",
+                    (stats.seconds, stats.manual_words, stats.manual_seconds, stats.manual_digest, str(path)))
 
     def history(self):
-        return self.db.execute("SELECT path, position, length, updated FROM documents ORDER BY updated DESC").fetchall()
+        return self.db.execute("SELECT path, position, length, updated, reading_seconds FROM documents ORDER BY updated DESC").fetchall()
 
     def close(self):
         self.db.close()
+
+
+@dataclass
+class ReadingStats:
+    seconds: float = 0.0
+    manual_words: int = 0
+    manual_seconds: float = 0.0
+    manual_digest: str = ""
+
+    @property
+    def manual_wpm(self):
+        if self.manual_words >= 20 and self.manual_seconds >= 10:
+            return self.manual_words * 60 / self.manual_seconds
+        return None
+
+
+class ReadingClock:
+    """Count visible reading time and calibrate only completed manual passages."""
+    def __init__(self, stats, now=None):
+        self.stats = stats
+        self.now = now or time.monotonic
+        self.last_tick = self.now()
+        self.active = False
+        self.manual = None
+        self.passage_seconds = 0.0
+        self.sample_valid = True
+
+    def tick(self):
+        current = self.now()
+        elapsed = max(0, current - self.last_tick)
+        self.last_tick = current
+        # A normal UI tick is about 0.1 s. Ignore process suspension / sleep.
+        if self.active and elapsed <= 3:
+            self.stats.seconds += elapsed
+            if self.manual:
+                self.passage_seconds += elapsed
+
+    def configure(self, active, manual):
+        self.tick()
+        if self.manual is not None and self.manual != manual:
+            self.reset_passage()
+        self.active, self.manual = active, manual
+
+    def reset_passage(self):
+        self.passage_seconds = 0.0
+        self.sample_valid = False
+
+    def complete_passage(self, words):
+        self.tick()
+        if self.manual and self.sample_valid and words > 0 and self.passage_seconds >= 0.2:
+            self.stats.manual_words += words
+            self.stats.manual_seconds += self.passage_seconds
+        self.passage_seconds = 0.0
+        self.sample_valid = True
+
+
+class WordIndex:
+    def __init__(self, text):
+        self.length = len(text)
+        self.starts = [match.start() for match in re.finditer(r"\S+", text)]
+
+    def count(self, start, end=None):
+        right = len(self.starts) if end is None else bisect_left(self.starts, end)
+        return right - bisect_left(self.starts, start)
+
+
+def remaining_estimate(words, position, stats, auto, speed, step=None, delay=None):
+    count = words.count(position)
+    if position >= words.length:
+        return 0.0, "complete", None
+    if auto:
+        seconds = count * 60 / speed
+        if step is not None and delay is not None:
+            seconds = max(0, delay) + words.count(step) * 60 / speed
+        return seconds, "configured_speed", speed
+    rate = stats.manual_wpm
+    if rate is None:
+        return None, "calibrating", None
+    return count * 60 / rate, "observed_manual_speed", rate
+
+
+def duration(seconds, rounded_up=False):
+    seconds = max(0, math.ceil(seconds) if rounded_up else int(seconds))
+    minutes, seconds = divmod(seconds, 60)
+    hours, minutes = divmod(minutes, 60)
+    return f"{hours:d}:{minutes:02d}:{seconds:02d}" if hours else f"{minutes:02d}:{seconds:02d}"
 
 
 def load_document(path, encoding):
@@ -273,8 +386,11 @@ def terminal_accent():
     return curses.A_BOLD
 
 
-def run_ui(screen, text, path, memory, args, position, changed, source=None, offsets=None):
+def run_ui(screen, text, path, memory, args, position, changed, source=None, offsets=None, stats=None):
     source = text if source is None else source
+    stats = stats if stats is not None else memory.timing(path, text, changed)
+    clock = ReadingClock(stats)
+    words_index = WordIndex(text)
 
     def source_position():
         return offsets[position] if offsets is not None else position
@@ -292,6 +408,7 @@ def run_ui(screen, text, path, memory, args, position, changed, source=None, off
     stack = []
     notice = "Fichier modifié : reprise au début." if changed else ""
     last_saved = None
+    last_save_time = time.monotonic()
     last_layout = None
     help_open = False
     help_offset = 0
@@ -299,7 +416,8 @@ def run_ui(screen, text, path, memory, args, position, changed, source=None, off
         "Raccourcis de lecture", "",
         "n / Entrée / →    Passage suivant",
         "b / ←             Passage précédent, puis pause",
-        "Espace            Avancer en manuel ; pause en auto",
+        "Espace            Avancer / reprendre ; pause en auto",
+        "p                 Pause / reprise, dans tous les modes",
         "a                 Activer ou suspendre l'automatique",
         "j / k             Réduire / augmenter le passage",
         "+ / -             Accélérer / ralentir de 25 mots/min",
@@ -310,11 +428,13 @@ def run_ui(screen, text, path, memory, args, position, changed, source=None, off
         "? / Échap          Fermer cette aide",
     ]
 
-    def save():
-        nonlocal last_saved
-        if position != last_saved:
-            memory.save(path, source, source_position())
-            last_saved = position
+    def save(force=False):
+        nonlocal last_saved, last_save_time
+        clock.tick()
+        now = time.monotonic()
+        if force or last_saved is None or position != last_saved or now - last_save_time >= 5:
+            memory.save(path, source, source_position(), stats)
+            last_saved, last_save_time = position, now
 
     try:
         while True:
@@ -330,6 +450,7 @@ def run_ui(screen, text, path, memory, args, position, changed, source=None, off
                         pass
 
             if height < 8 or width < 35:
+                clock.configure(False, not auto)
                 put(0, "Agrandissez le terminal (35 × 8 min).")
                 put(1, "q : quitter et sauvegarder")
                 screen.refresh()
@@ -347,23 +468,35 @@ def run_ui(screen, text, path, memory, args, position, changed, source=None, off
             layout = (body_height, body_width)
             if layout != last_layout:
                 deadline = None
+                if last_layout is not None:
+                    clock.reset_passage()
                 last_layout = layout
             visible, end = page(text, position, args.mode, args.size, body_width, body_height)
             step = visible[0][1] if args.mode == "scroll" and visible else end
             done = position >= len(text)
             if done:
                 auto = False
-            if auto and not help_open and deadline is None:
-                words = max(1, len(re.findall(r"\S+", text[position:step])))
+            clock.configure(not done and not paused and not help_open, not auto)
+            if auto and not paused and not help_open and deadline is None:
+                words = max(1, words_index.count(position, step))
                 deadline = time.monotonic() + max(0.25, words * 60 / speed)
+
+            estimate, basis, rate = remaining_estimate(
+                words_index, position, stats, auto, speed, step,
+                None if deadline is None else deadline - time.monotonic(),
+            )
 
             put(0, path.name, curses.A_BOLD, x=2)
             mode_label = {"lines": "Lignes", "words": "Mots", "scroll": "Défilement"}[args.mode]
-            reading_state = "Lecture terminée" if done else "En pause · aide" if help_open else "Lecture automatique" if auto else "En pause" if paused else "Lecture manuelle"
-            metadata = f"{mode_label} · {speed} mots/min · {reading_state}"
+            reading_state = "Lecture terminée" if done else "En pause · aide" if help_open else "En pause" if paused else "Lecture automatique" if auto else "Lecture manuelle"
+            rhythm = f"{speed} mots/min" if auto else f"{rate:.0f} mots/min observés" if rate else "Rythme à calibrer"
+            metadata = f"{mode_label} · {rhythm} · {reading_state}"
             if width < 65:
                 reading_state = "Fin" if done else "Pause" if help_open or paused else "Auto" if auto else "Manuel"
-                metadata = f"{mode_label} · {speed} m/min · {reading_state}"
+                rhythm = f"{rate:.0f} m/min" if rate else "calibrage"
+                metadata = f"{mode_label} · {rhythm} · {reading_state}"
+            if done:
+                metadata = f"{mode_label} · {reading_state}"
             put(1, metadata, accent, x=2)
             unit = "mots" if args.mode == "words" else "lignes"
             if spacious:
@@ -391,14 +524,21 @@ def run_ui(screen, text, path, memory, args, position, changed, source=None, off
             partial = "▏▎▍▌▋▊▉"[remainder - 1] if remainder else ""
             bar = "█" * filled + partial + "░" * (bar_width - filled - bool(partial))
             put(height - 3, f"[{bar}] {fraction:6.1%}", accent)
+            remaining_label = "calibrage" if estimate is None else ("" if basis == "complete" else "≈ ") + duration(estimate, rounded_up=True)
+            estimate_label = "auto" if basis == "configured_speed" else "observé" if basis == "observed_manual_speed" else ""
+            timing = f"Temps cumulé : {duration(stats.seconds)} · Reste {remaining_label} {estimate_label}"
+            if width < 65:
+                timing = f"Lu {duration(stats.seconds)} · reste {remaining_label}"
+            put(height - 4, timing, curses.A_DIM)
             if help_open:
                 put(height - 2, "↑/↓ : défiler · ?/Échap : retour")
                 put(height - 1, "Lecture suspendue pendant l'aide", curses.A_DIM)
             else:
                 put(height - 2, notice or "n suite · b retour · espace suite/pause", curses.A_DIM)
-                put(height - 1, "j/k taille · ? aide · q quitter")
+                put(height - 1, "p pause · j/k taille · ? aide · q quitter" if width >= 55 else "p pause · ? aide · q quitter")
             screen.refresh()
             key = screen.getch()
+            clock.tick()
             advance = False
             if key == ord("?") or (help_open and key == 27):
                 help_open = not help_open
@@ -420,10 +560,13 @@ def run_ui(screen, text, path, memory, args, position, changed, source=None, off
                 advance = True
             elif key == ord(" "):
                 if auto:
-                    auto, deadline = False, None
-                    paused = True
+                    paused, deadline = not paused, None
+                elif paused:
+                    paused = False
                 else:
                     advance = True
+            elif key == ord("p"):
+                paused, deadline = not paused, None
             elif key == ord("a"):
                 auto, deadline = not auto, None
                 paused = not auto
@@ -433,26 +576,30 @@ def run_ui(screen, text, path, memory, args, position, changed, source=None, off
             elif key in (ord("j"), ord("k"), ord("["), ord("]")):
                 amount = 10 if args.mode == "words" else 1
                 args.size = max(1, args.size + (amount if key in (ord("k"), ord("]")) else -amount))
+                clock.reset_passage()
                 deadline = None
                 notice = f"Passage : {args.size} {unit} (limité à la fenêtre)."
             elif key in (ord("b"), curses.KEY_LEFT, curses.KEY_UP):
                 position = stack.pop() if stack else previous(text, position, args.mode, args.size, body_width, body_height)
+                clock.reset_passage()
                 paused = paused or auto
                 auto, deadline = False, None
             elif key == ord("g"):
                 stack.append(position)
                 position, auto, deadline = 0, False, None
+                clock.reset_passage()
                 paused = False
-            elif key == -1 and auto and deadline is not None and time.monotonic() >= deadline:
+            elif key == -1 and auto and not paused and deadline is not None and time.monotonic() >= deadline:
                 advance = True
             if advance and not done:
+                clock.complete_passage(words_index.count(position, step))
                 stack.append(position)
                 position = step
                 paused = False
                 deadline = None
                 notice = ""
     finally:
-        save()
+        save(force=True)
 
 
 def positive(value):
@@ -484,27 +631,37 @@ def main(argv=None):
     try:
         memory = Memory(args.state)
         if args.history:
-            for path, position, length, updated in memory.history():
-                print(f"{position / max(1, length):6.1%}  {updated} UTC  {path}")
+            for path, position, length, updated, seconds in memory.history():
+                print(f"{position / max(1, length):6.1%}  lu {duration(seconds)}  {updated} UTC  {path}")
             return 0
         path = args.file.expanduser().resolve(strict=True)
-        text = load_document(path, args.encoding)
-        position, changed = memory.resume(path, text)
-        if args.status:
-            print(json.dumps(dict(path=str(path), position=position, length=len(text), percent=round(position / len(text) * 100, 2), changed=changed), ensure_ascii=False))
-            return 0
-        if not sys.stdin.isatty() or not sys.stdout.isatty():
-            raise ValueError("La lecture interactive nécessite un terminal. Utilisez --status pour consulter la progression.")
-        source, offsets = text, None
+        source = load_document(path, args.encoding)
+        source_position, changed = memory.resume(path, source)
+        text, offsets = source, None
+        position = source_position
         if path.suffix.lower() in (".md", ".markdown", ".mdown") and not args.raw:
             text, offsets = markdown_preview(source)
             if not text.strip():
                 raise ValueError("Aucun texte à afficher dans l'aperçu Markdown. Essayez --raw.")
             position = bisect_left(offsets, position)
+        stats = memory.timing(path, text, changed)
+        if args.status:
+            words = WordIndex(text)
+            seconds, basis, rate = remaining_estimate(words, position, stats, args.auto or args.mode == "scroll", args.wpm)
+            print(json.dumps(dict(
+                path=str(path), position=source_position, length=len(source),
+                percent=round(source_position / len(source) * 100, 2), changed=changed,
+                reading_seconds=round(stats.seconds, 2), remaining_words=words.count(position),
+                estimated_remaining_seconds=None if seconds is None else round(seconds, 1),
+                estimate_basis=basis, estimated_wpm=None if rate is None else round(rate, 1),
+            ), ensure_ascii=False))
+            return 0
+        if not sys.stdin.isatty() or not sys.stdout.isatty():
+            raise ValueError("La lecture interactive nécessite un terminal. Utilisez --status pour consulter la progression.")
         locale.setlocale(locale.LC_ALL, "")
         terminal_settings = termios.tcgetattr(sys.stdin.fileno())
         try:
-            curses.wrapper(run_ui, text, path, memory, args, 0 if args.restart else position, changed, source, offsets)
+            curses.wrapper(run_ui, text, path, memory, args, 0 if args.restart else position, changed, source, offsets, stats)
         finally:
             termios.tcsetattr(sys.stdin.fileno(), termios.TCSADRAIN, terminal_settings)
         print(f"Position sauvegardée dans {args.state.expanduser()}")

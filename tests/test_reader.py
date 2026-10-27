@@ -6,6 +6,7 @@ import unittest
 from unittest.mock import patch
 import subprocess
 import shutil
+import sqlite3
 
 
 loader = importlib.machinery.SourceFileLoader("reader", str(Path(__file__).resolve().parents[1] / "reader"))
@@ -30,12 +31,182 @@ class ReadingTests(unittest.TestCase):
                     self.assertEqual(reader.main(options), 0)
                 return output.getvalue()
 
-            expected = invoke([str(document), "--status", "--state", database, "--encoding", "latin-1"])
             for mode in ("l", "w", "s"):
+                expected = invoke([str(document), "--status", "--state", database, "--encoding", "latin-1",
+                                   "--mode", {"l": "lines", "w": "words", "s": "scroll"}[mode],
+                                   "--size", "5", "--auto", "--wpm", "180", "--restart", "--raw"])
                 actual = invoke([str(document), "-p", "-S", database, "-e", "latin-1",
                                  "-m", mode, "-s", "5", "-a", "-w", "180", "-r", "-R"])
                 self.assertEqual(actual, expected)
             self.assertEqual(invoke(["-H", "-S", database]), invoke(["--history", "--state", database]))
+
+    def test_clock_excludes_pauses_help_auto_samples_and_suspension(self):
+        now = [0.0]
+        stats = reader.ReadingStats()
+        clock = reader.ReadingClock(stats, now=lambda: now[0])
+
+        def advance(seconds):
+            for _ in range(seconds):
+                now[0] += 1
+                clock.tick()
+
+        clock.configure(True, True)
+        advance(10)
+        clock.complete_passage(20)
+        self.assertEqual(stats.seconds, 10)
+        self.assertAlmostEqual(stats.manual_wpm, 120)
+        clock.configure(False, True)
+        advance(8)
+        self.assertEqual(stats.seconds, 10)
+        clock.configure(True, False)
+        advance(5)
+        clock.complete_passage(100)
+        self.assertEqual(stats.seconds, 15)
+        self.assertEqual(stats.manual_words, 20)
+        self.assertEqual(stats.manual_seconds, 10)
+        now[0] += 100
+        clock.tick()
+        self.assertEqual(stats.seconds, 15)
+
+    def test_calibration_ignores_skips_and_changed_passages(self):
+        now = [0.0]
+        stats = reader.ReadingStats()
+        clock = reader.ReadingClock(stats, now=lambda: now[0])
+        clock.configure(True, True)
+        now[0] += 0.1
+        clock.complete_passage(100)
+        self.assertIsNone(stats.manual_wpm)
+        for _ in range(5):
+            now[0] += 1
+            clock.tick()
+        clock.reset_passage()
+        now[0] += 1
+        clock.complete_passage(100)
+        self.assertEqual(stats.manual_words, 0)
+        for _ in range(10):
+            now[0] += 1
+            clock.tick()
+        clock.complete_passage(20)
+        self.assertAlmostEqual(stats.manual_wpm, 120)
+
+    def test_manual_ui_calibrates_and_saves_an_observed_estimate(self):
+        from types import SimpleNamespace
+
+        now = [0.0]
+        actions = iter([(1, -1)] * 10 + [(0, ord("n")), (0, ord("q"))])
+        frames = []
+
+        class Screen:
+            def timeout(self, value):
+                pass
+
+            def getmaxyx(self):
+                return 24, 80
+
+            def erase(self):
+                self.lines = {}
+
+            def addstr(self, y, x, value, style=0):
+                self.lines[y] = value
+
+            def refresh(self):
+                frames.append(dict(self.lines))
+
+            def getch(self):
+                seconds, key = next(actions)
+                now[0] += seconds
+                return key
+
+        with tempfile.TemporaryDirectory() as folder:
+            path = Path(folder) / "notes.txt"
+            text = " ".join(f"mot{i}" for i in range(100))
+            memory = reader.Memory(Path(folder) / "state.sqlite3")
+            try:
+                args = SimpleNamespace(auto=False, mode="words", wpm=999, size=20)
+                with patch.object(reader.time, "monotonic", side_effect=lambda: now[0]):
+                    reader.run_ui(Screen(), text, path, memory, args, 0, False)
+                stats = memory.timing(path, text)
+                self.assertEqual(stats.seconds, 10)
+                self.assertAlmostEqual(stats.manual_wpm, 120)
+                self.assertIn("00:40 observé", frames[-1][20])
+                self.assertIn("120 mots/min observés", frames[-1][1])
+            finally:
+                memory.close()
+
+    def test_calibration_also_works_for_single_word_passages(self):
+        now = [0.0]
+        stats = reader.ReadingStats()
+        clock = reader.ReadingClock(stats, now=lambda: now[0])
+        clock.configure(True, True)
+        for _ in range(40):
+            now[0] += 0.25
+            clock.complete_passage(1)
+        self.assertEqual(stats.manual_wpm, 240)
+
+    def test_remaining_time_uses_configured_or_observed_speed(self):
+        text = " ".join(f"mot{i}" for i in range(120))
+        words = reader.WordIndex(text)
+        stats = reader.ReadingStats()
+        position = words.starts[20]
+        self.assertEqual(reader.remaining_estimate(words, position, stats, False, 200), (None, "calibrating", None))
+        self.assertEqual(reader.remaining_estimate(words, position, stats, True, 240), (25, "configured_speed", 240))
+        self.assertEqual(reader.remaining_estimate(words, position, stats, True, 240, words.starts[80], 0.5), (10.5, "configured_speed", 240))
+        stats.manual_words, stats.manual_seconds = 20, 10
+        self.assertEqual(reader.remaining_estimate(words, position, stats, False, 999), (50, "observed_manual_speed", 120))
+        self.assertEqual(reader.remaining_estimate(words, len(text), stats, False, 200), (0, "complete", None))
+        self.assertEqual(reader.duration(59.9), "00:59")
+        self.assertEqual(reader.duration(59.9, rounded_up=True), "01:00")
+        self.assertEqual(reader.duration(3605), "1:00:05")
+
+    def test_old_database_migration_preserves_positions_and_timing_persists(self):
+        with tempfile.TemporaryDirectory() as folder:
+            db = Path(folder) / "old.sqlite3"
+            path = Path(folder) / "notes.txt"
+            text = "un deux trois"
+            old = sqlite3.connect(db)
+            old.execute("CREATE TABLE documents (path TEXT PRIMARY KEY, digest TEXT NOT NULL, position INTEGER NOT NULL, length INTEGER NOT NULL, updated TEXT NOT NULL)")
+            old.execute("INSERT INTO documents VALUES (?, ?, ?, ?, datetime('now'))",
+                        (str(path), reader.hashlib.sha256(text.encode()).hexdigest(), 3, len(text)))
+            old.commit()
+            old.close()
+            memory = reader.Memory(db)
+            self.assertEqual(memory.resume(path, text), (3, False))
+            stats = memory.timing(path, text)
+            self.assertEqual(stats.seconds, 0)
+            stats.seconds, stats.manual_words, stats.manual_seconds = 42, 20, 10
+            memory.save(path, text, 3, stats)
+            memory.close()
+            memory = reader.Memory(db)
+            try:
+                restored = memory.timing(path, text)
+                self.assertEqual(restored.seconds, 42)
+                self.assertEqual(restored.manual_wpm, 120)
+                changed = memory.timing(path, "nouveau contenu", changed=True)
+                self.assertEqual(changed.seconds, 42)
+                self.assertIsNone(changed.manual_wpm)
+                self.assertIsNone(memory.timing(path, "autre rendu").manual_wpm)
+                memory.save(path, text, 0)
+                self.assertEqual(memory.timing(path, text).seconds, 42)
+            finally:
+                memory.close()
+
+    def test_status_estimate_counts_markdown_preview_words(self):
+        import contextlib
+        import io
+        import json
+
+        with tempfile.TemporaryDirectory() as folder:
+            document = Path(folder) / "notes.md"
+            document.write_text("# Titre\n\n**un deux trois** [source](https://example.com)")
+            args = [str(document), "-S", str(Path(folder) / "state.sqlite3"), "-p"]
+            output = io.StringIO()
+            with contextlib.redirect_stdout(output):
+                self.assertEqual(reader.main(args + ["-a", "-w", "60"]), 0)
+            result = json.loads(output.getvalue())
+            self.assertEqual(result["remaining_words"], 5)
+            self.assertEqual(result["estimated_remaining_seconds"], 5)
+            self.assertEqual(result["estimate_basis"], "configured_speed")
+            self.assertEqual(result["reading_seconds"], 0)
 
     def test_markdown_preview_and_source_positions(self):
         source = '''<img src="logo.png" />

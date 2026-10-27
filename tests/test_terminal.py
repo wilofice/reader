@@ -108,6 +108,7 @@ class TerminalTests(unittest.TestCase):
             self.assertIn("Raccourcis de lecture".encode(), output)
             self.assertIn("En pause".encode(), output)
             self.assertEqual(self.status(args)["position"], 0)
+            self.assertLess(self.status(args)["reading_seconds"], 1.0)
             output = self.session(args, [(0.4, b"j"), (0.2, b"k"), (0.2, b"q")])
             self.assertIn(b"Passage : 10 mots", output)
             self.assertIn(b"Passage : 20 mots", output)
@@ -124,6 +125,41 @@ class TerminalTests(unittest.TestCase):
             output = self.session(args, [(0.4, b"n"), (0.2, b"q")], terminal_size=(8, 35))
             self.assertIn(b"notes.txt", output)
             self.assertGreater(self.status(args)["position"], 0)
+
+    def test_reading_time_persists_and_manual_pause_stops_the_clock(self):
+        with tempfile.TemporaryDirectory() as directory:
+            folder = Path(directory)
+            document = folder / "notes.txt"
+            document.write_text("Un passage à lire tranquillement.\n" * 30)
+            args = [str(document), "-S", str(folder / "state.sqlite3")]
+            output = self.session(args, [(0.6, b"p"), (1.2, b"q")])
+            first = self.status(args)["reading_seconds"]
+            self.assertGreater(first, 0.2)
+            self.assertLess(first, 1.0)
+            self.assertIn(b"Temps cumul", output)
+            self.assertIn(b"calibrage", output)
+            self.session(args, [(0.6, b"q")])
+            second = self.status(args)["reading_seconds"]
+            self.assertGreater(second, first + 0.3)
+            self.assertEqual(second, self.status(args)["reading_seconds"])
+            self.assertIsNone(self.status(args)["estimated_remaining_seconds"])
+
+    def test_auto_pause_and_completion_stop_the_clock(self):
+        with tempfile.TemporaryDirectory() as directory:
+            folder = Path(directory)
+            document = folder / "notes.txt"
+            document.write_text("mot " * 100)
+            args = [str(document), "-S", str(folder / "state.sqlite3"), "-m", "w", "-s", "20", "-a", "-w", "1200"]
+            self.session(args, [(0.4, b"p"), (1.2, b"q")])
+            self.assertEqual(self.status(args)["position"], 0)
+            self.assertLess(self.status(args)["reading_seconds"], 0.9)
+            document.write_text("Fin.")
+            before = self.status(args)["reading_seconds"]
+            self.session(args, [(1.2, b"q")])
+            after = self.status(args)
+            self.assertEqual(after["percent"], 100)
+            self.assertEqual(after["estimated_remaining_seconds"], 0)
+            self.assertLess(after["reading_seconds"] - before, 0.7)
 
 
 if __name__ == "__main__":
