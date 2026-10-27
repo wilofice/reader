@@ -22,6 +22,11 @@ import time
 import unicodedata
 
 
+# Marcel Proust, Journées de lecture, Pastiches et Mélanges (1919).
+# https://fr.wikisource.org/wiki/Journ%C3%A9es_de_lecture
+READING_QUOTE = "« La lecture est une amitié. » — Marcel Proust"
+
+
 def state_path():
     root = os.environ.get("XDG_STATE_HOME")
     return (Path(root).expanduser() if root else Path.home() / ".local/state") / "reader/reading.sqlite3"
@@ -501,9 +506,15 @@ def run_ui(screen, text, path, memory, args, position, changed, source=None, off
             unit = "mots" if args.mode == "words" else "lignes"
             if spacious:
                 setting = f"Passage : {args.size} {unit}"
-                if width >= 65:
-                    setting += "    j réduire · k augmenter"
+                hint = "    j réduire · k augmenter"
+                quote_width = sum(map(cell_width, READING_QUOTE))
+                quote_x = width - 2 - quote_width
+                quote_fits = quote_x >= 2 + sum(map(cell_width, setting)) + 3
+                if width >= 65 and (not quote_fits or quote_x >= 2 + sum(map(cell_width, setting + hint)) + 3):
+                    setting += hint
                 put(2, setting, x=2)
+                if quote_fits:
+                    put(2, READING_QUOTE, curses.A_DIM, x=quote_x)
             put(body_start - 2 if spacious else 2, "─" * (width - 4), curses.A_DIM, x=2)
             if help_open:
                 help_text = "\n".join(help_lines)
