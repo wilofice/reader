@@ -7,17 +7,48 @@ L'aperçu visuel facultatif utilise aussi Chafa : `brew install chafa`.
 
 ## Installer sur un autre Mac
 
+Depuis le dépôt cloné, installez les dépendances avec une seule commande :
+
+```sh
+./install.sh
+```
+
+Le script vérifie Python **3.10+** avec `curses` et SQLite, Poppler (`pdftotext`
+et `pdftoppm`) et Chafa. Il installe les éléments manquants via Homebrew et
+ne lance aucune installation si tout fonctionne déjà. Si Homebrew est absent,
+il lance son [installateur officiel](https://docs.brew.sh/Installation), qui peut
+demander confirmation, les outils de développement Apple et un mot de passe
+administrateur. Une connexion Internet est nécessaire pour installer.
+
+Pour vérifier seulement, sans installation ni accès réseau :
+
+```sh
+./install.sh --check
+```
+
+Cette vérification utilise le `PATH` du terminal courant et renvoie un code
+non nul si une dépendance manque. Le script ne modifie ni le profil du shell,
+ni les documents, ni la progression. S'il trouve ou installe Homebrew hors de
+votre `PATH`, il affiche une ligne `export PATH=...` à exécuter dans ce terminal.
+Suivez les indications de Homebrew pour rendre ce réglage permanent si besoin.
+Les dépendances indirectes installées ou mises à jour sont gérées par Homebrew.
+iTerm2, GitHub CLI et les modèles LLM ne font pas partie des dépendances installées.
+
+### Premier clonage
+
 Sur un MacBook Air Apple Silicon ou Intel, avec Homebrew disponible :
 
 ```sh
-brew install python poppler gh
+brew install gh
 gh auth login
 gh repo clone wilofice/reader
 cd reader
-python3 --version
+git switch codex/next-iteration
+./install.sh
 ./reader README.md
 ```
 
+La commande d'installation est actuellement sur la branche `codex/next-iteration`.
 Le dépôt est privé : authentifiez-vous avec un compte qui y a accès. Si Git et
 votre accès GitHub sont déjà configurés, vous pouvez aussi utiliser
 `git clone git@github.com:wilofice/reader.git`. Poppler est facultatif si vous ne
