@@ -252,3 +252,11 @@ en pseudo-terminal vérifient les touches, le changement de taille, la reprise,
 la pause pendant l'aide, l'affichage compact, le défilement, la fin de lecture
 et la restauration du terminal. Un test extrait
 aussi un vrai PDF si Poppler est disponible ; sinon ce test est ignoré.
+
+## Recherche et évolutions proposées
+
+Le [rapport sur la lecture assidue et l'apprentissage durable](RAPPORT-LECTURE-APPRENTISSAGE.md)
+réunit les recherches consultées, leurs limites et les fonctions envisagées :
+préférences mémorisées, journal de séances, notes, rappel actif, révisions espacées
+et liens entre idées. Il décrit un ordre de développement et des critères
+d'évaluation. Ces propositions ne sont pas encore implémentées.
