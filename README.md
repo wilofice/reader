@@ -170,6 +170,7 @@ Toutes les anciennes formes restent acceptées. Par exemple,
 | `-h` | `--help` | Aide |
 | `-z` | `--zen` | Démarrer en lecture épurée |
 | — | `--graphics` | Format de l'aperçu PDF via Chafa |
+| — | `--preview` | Mode d'aperçu PDF : `auto`, `iterm2` ou `quicklook` (alias de `--graphics`) |
 | — | `--new-reading` | Commencer le cycle suivant après la fin du précédent |
 | — | `--readings` | Afficher les cycles du document et leurs durées |
 
@@ -365,8 +366,8 @@ sans perdre la position. Dans un Markdown ou un texte, elle indique la ligne
 du source, y compris en aperçu Markdown.
 
 **Ce prototype affiche la page originale entière, sans reconnaissance des objets.**
-La touche `v` rend sa mise en page avec Poppler, puis l'affiche avec Chafa dans
-le même terminal : figures, tableaux et formules restent à leur emplacement.
+La touche `v` rend sa mise en page avec Poppler, puis l'affiche dans le mode
+adapté : figures, tableaux et formules restent à leur emplacement.
 Si le passage couvre plusieurs pages, l'aperçu commence à la première ; vous
 pouvez consulter la suivante sans avancer votre position de lecture.
 
@@ -374,6 +375,37 @@ pouvez consulter la suivante sans avancer votre position de lecture.
 brew install poppler chafa
 ./reader "document.pdf"
 ```
+
+Le mode par défaut `--preview auto` identifie le terminal à l'exécution à partir
+de ses variables d'environnement, notamment `TERM_PROGRAM` :
+
+| Environnement reconnu | Aperçu choisi |
+| --- | --- |
+| iTerm2 (`iTerm.app`) | Image intégrée centrée horizontalement, via Chafa |
+| Terminal.app (`Apple_Terminal`), sur macOS local | Fenêtre Quick Look avec l'image de la page courante |
+| Kitty, Ghostty ou WezTerm reconnus | Image intégrée via le protocole Kitty |
+| Terminal inconnu ou environnement masqué par un multiplexeur | Symboles, avec avertissement de qualité |
+
+Ce mécanisme ne garantit pas d'identifier tous les terminaux : les variables
+peuvent être absentes ou héritées, particulièrement à distance. L'ouverture
+automatique de Quick Look est désactivée en contexte SSH et sous multiplexeur.
+Vous pouvez toujours forcer votre choix :
+
+```sh
+./reader "document.pdf" --preview iterm2
+./reader "document.pdf" --preview quicklook
+```
+
+Le mode Quick Look nécessite macOS, Poppler et l'outil système `qlmanage`, sans
+Chafa. Il ouvre **l'image de la page concernée**, pas le PDF à parcourir de
+nouveau. Fermez la fenêtre pour revenir au même passage ; depuis le terminal,
+`v`, Échap ou `q` ferment aussi l'aperçu lancé par Reader. Quick Look gère ses
+propres commandes graphiques : les raccourcis du tableau ci-dessous concernent
+uniquement l'aperçu intégré. Pour consulter une autre page en Quick Look,
+revenez au lecteur et naviguez dans le texte. Le temps d'ouverture est compté
+comme temps d'inspection ; fermez la fenêtre si vous interrompez la consultation.
+
+**Dans l'aperçu intégré iTerm2 ou les autres formats Chafa :**
 
 | Touche dans l'aperçu | Action |
 | --- | --- |
@@ -408,7 +440,7 @@ Pour choisir le protocole explicitement si la détection ne convient pas :
 ./reader "document.pdf" --graphics symbols
 ```
 
-Le format forcé doit être pris en charge par le terminal. Les transferts via
+Le format graphique forcé doit être pris en charge par le terminal. Les transferts via
 SSH et les multiplexeurs demandent une vérification de la configuration.
 Les protocoles Kitty et iTerm ont été testés à l'encodage ; leur affichage réel
 dans chaque terminal doit encore être validé sur les machines d'utilisation.

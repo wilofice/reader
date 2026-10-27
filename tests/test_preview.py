@@ -52,11 +52,51 @@ class PreviewTests(unittest.TestCase):
         self.assertEqual(pdf_preview.graphics_format(environment={"TERM": "xterm-kitty"}), "kitty")
         self.assertEqual(pdf_preview.graphics_format(environment={"TERM": "xterm-kitty", "TMUX": "yes"}), "symbols")
         self.assertEqual(pdf_preview.graphics_format("sixels", {}), "sixels")
+        self.assertEqual(pdf_preview.graphics_format("iterm2", {}), "iterm")
+        with patch.object(pdf_preview.sys, "platform", "darwin"):
+            self.assertEqual(pdf_preview.graphics_format(environment={"TERM_PROGRAM": "Apple_Terminal"}), "quicklook")
+            self.assertEqual(pdf_preview.graphics_format(environment={"TERM_PROGRAM": "Apple_Terminal", "SSH_CONNECTION": "remote"}), "symbols")
+            self.assertEqual(pdf_preview.graphics_format(environment={"TERM_PROGRAM": "Apple_Terminal", "TMUX": "yes"}), "symbols")
+        with patch.object(pdf_preview.sys, "platform", "linux"):
+            self.assertEqual(pdf_preview.graphics_format(environment={"TERM_PROGRAM": "Apple_Terminal"}), "symbols")
 
     def test_missing_dependencies_have_an_actionable_error(self):
         with patch.object(pdf_preview.shutil, "which", return_value=None):
-            with self.assertRaisesRegex(ValueError, "brew install poppler chafa"):
+            with self.assertRaisesRegex(ValueError, "brew install poppler"):
                 pdf_preview.PageRaster("missing.pdf")
+
+    def test_quicklook_closes_only_its_process_and_counts_inspection(self):
+        from unittest.mock import Mock
+        screen = Mock()
+        screen.getmaxyx.return_value = (24, 80)
+        screen.getch.return_value = 27
+        process = Mock()
+        process.poll.return_value = None
+        callback = Mock()
+        with patch.object(pdf_preview.subprocess, "Popen", return_value=process) as start, \
+                patch.object(pdf_preview.time, "monotonic", side_effect=[10, 10.5]):
+            elapsed = pdf_preview.inspect_quicklook(screen, Path("page-3.png"), 3, 10, callback)
+        self.assertEqual(elapsed, 0.5)
+        callback.assert_called_once_with(0.5)
+        self.assertEqual(start.call_args.args[0], ["qlmanage", "-p", "page-3.png"])
+        process.terminate.assert_called_once()
+        process.wait.assert_called_once_with(timeout=2)
+        screen.touchwin.assert_called_once()
+
+    def test_quicklook_dispatch_does_not_require_chafa(self):
+        from unittest.mock import Mock
+        screen = Mock()
+        screen.getmaxyx.return_value = (24, 80)
+        with patch.object(pdf_preview.sys, "platform", "darwin"), \
+                patch.object(pdf_preview.shutil, "which", side_effect=lambda name: None if name == "chafa" else "/usr/bin/" + name), \
+                patch.object(pdf_preview, "PageRaster") as raster, \
+                patch.object(pdf_preview, "inspect_quicklook", return_value=2) as inspect:
+            raster.return_value.page.return_value = Path("page.png")
+            self.assertEqual(pdf_preview.inspect_pdf(screen, Path("document.pdf"), 2, 10, "quicklook"), 2)
+            self.assertEqual(inspect.call_args.args[1:4], (Path("page.png"), 2, 10))
+        with patch.object(pdf_preview.sys, "platform", "linux"):
+            with self.assertRaisesRegex(ValueError, "nécessite macOS"):
+                pdf_preview.inspect_pdf(screen, Path("document.pdf"), 1, 10, "quicklook")
 
     def test_timeout_is_reported(self):
         with patch.object(pdf_preview.subprocess, "run", side_effect=subprocess.TimeoutExpired("render", 30)):

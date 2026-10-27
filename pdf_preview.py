@@ -1,4 +1,4 @@
-"""Optional PDF page inspection using Poppler and Chafa, without a GUI."""
+"""PDF page inspection with Poppler, inline Chafa graphics or macOS Quick Look."""
 
 import curses
 import hashlib
@@ -13,6 +13,8 @@ import time
 
 
 def graphics_format(requested="auto", environment=None):
+    if requested == "iterm2":
+        return "iterm"
     if requested != "auto":
         return requested
     env = os.environ if environment is None else environment
@@ -21,6 +23,9 @@ def graphics_format(requested="auto", environment=None):
         return "symbols"
     if env.get("TERM_PROGRAM") == "iTerm.app":
         return "iterm"
+    if (env.get("TERM_PROGRAM") == "Apple_Terminal" and sys.platform == "darwin"
+            and not env.get("SSH_CONNECTION") and not env.get("SSH_TTY")):
+        return "quicklook"
     if (env.get("KITTY_WINDOW_ID") or env.get("TERM") in ("xterm-kitty", "xterm-ghostty")
             or env.get("TERM_PROGRAM") in ("ghostty", "WezTerm")):
         return "kitty"
@@ -48,8 +53,8 @@ def png_size(path):
 
 class PageRaster:
     def __init__(self, path, cache_root=None):
-        if not shutil.which("pdftoppm") or not shutil.which("chafa"):
-            raise ValueError("Aperçu PDF : installez les outils avec `brew install poppler chafa`.")
+        if not shutil.which("pdftoppm"):
+            raise ValueError("Aperçu PDF : installez Poppler avec `brew install poppler`.")
         self.path = Path(path).resolve(strict=True)
         self.signature = self.file_signature()
         digest = hashlib.sha256()
@@ -96,10 +101,72 @@ class PageRaster:
         return target
 
 
+def inspect_quicklook(screen, image, number, total, on_time=None):
+    """Use macOS's native preview for this page image, keeping the reader alive."""
+    screen.erase()
+    height, width = screen.getmaxyx()
+    messages = [f"Quick Look · page PDF {number}/{total}", "",
+                "Fermez la fenêtre Quick Look pour revenir au même passage.",
+                "Depuis ce terminal : v / Échap / q pour fermer l'aperçu."]
+    for row, message in enumerate(messages[:height]):
+        try:
+            screen.addstr(row, 0, message[:max(0, width - 1)])
+        except curses.error:
+            pass
+    screen.refresh()
+    screen.timeout(100)
+    seconds = 0.0
+    with tempfile.TemporaryFile() as errors:
+        process = subprocess.Popen(["qlmanage", "-p", str(image)], stdin=subprocess.DEVNULL,
+                                   stdout=subprocess.DEVNULL, stderr=errors)
+        try:
+            while process.poll() is None:
+                before = time.monotonic()
+                key = screen.getch()
+                elapsed = time.monotonic() - before
+                if 0 <= elapsed <= 3:
+                    seconds += elapsed
+                    if on_time is not None:
+                        on_time(elapsed)
+                if key in (ord("v"), ord("q"), 27):
+                    break
+            if process.poll() not in (None, 0):
+                errors.seek(0)
+                raise ValueError("Quick Look : " + errors.read().decode("utf-8", errors="replace")[:300])
+        finally:
+            if process.poll() is None:
+                process.terminate()
+                try:
+                    process.wait(timeout=2)
+                except subprocess.TimeoutExpired:
+                    process.kill()
+                    process.wait(timeout=2)
+            screen.clear()
+            screen.touchwin()
+            screen.refresh()
+    return seconds
+
+
 def inspect_pdf(screen, path, number, total, requested="auto", cache_root=None, on_time=None):
     """Return inspection time; never change the reader's text position or cycle."""
-    raster = PageRaster(path, cache_root)
     output_format = graphics_format(requested)
+    if output_format == "quicklook":
+        if sys.platform != "darwin" or not shutil.which("qlmanage"):
+            raise ValueError("Le mode Quick Look nécessite macOS et qlmanage.")
+    elif not shutil.which("chafa"):
+        raise ValueError("Aperçu intégré : installez Chafa avec `brew install chafa`.")
+    raster = PageRaster(path, cache_root)
+    if output_format == "quicklook":
+        try:
+            screen.erase()
+            screen.addstr(0, 0, "Préparation de la page Quick Look…"[:screen.getmaxyx()[1] - 1])
+            screen.refresh()
+            image = raster.page(number)
+            return inspect_quicklook(screen, image, number, total, on_time)
+        finally:
+            screen.clear()
+            screen.touchwin()
+            screen.refresh()
     zoom, x, y = 1, 0, 0
     dirty, paused = True, False
     inspection_seconds = 0.0
@@ -144,11 +211,11 @@ def inspect_pdf(screen, path, number, total, requested="auto", cache_root=None, 
                         payload = checked_run([
                             "chafa", f"--format={output_format}", "--probe=off", "--animate=off",
                             "--relative=on", "--scale=max", f"--size={width - 2}x{height - 5}",
-                            f"--view-size={width - 2}x{height - 5}", str(image),
+                            "--align=hcenter", f"--view-size={width - 2}x{height - 5}", str(image),
                         ])
                         screen.move(3, 0)
                         screen.clrtoeol()
-                        screen.move(2, 0)
+                        screen.move(2, 1)
                         screen.refresh()
                         sys.stdout.buffer.write(payload)
                         sys.stdout.buffer.flush()
