@@ -108,12 +108,12 @@ par pas de 5 minutes : **minimum 5 minutes**, 25 minutes par défaut.
 Démarrer une séance reprend une lecture mise en pause. Si le document est
 terminé, revenez avec `b` ou commencez une nouvelle lecture avec `N`, puis `f`.
 
-Le temps apparaît en grands chiffres **heures:minutes**, avec la mention `h:min`,
-en haut à droite : `01:25` signifie 1 heure et 25 minutes. Sur un terminal petit,
-il passe en affichage compact. **Les chiffres changent une fois par minute** :
-le chrono reste à `00:00` pendant sa première minute ; un minuteur de 5 minutes
-reste à `00:05`, puis passe à `00:04`. Le symbole `▶` indique une séance active,
-même entre deux changements de minute. `f` arrête le focus ; `p` suspend ou reprend la
+Le temps apparaît en grands chiffres **minutes:secondes**, en haut à droite :
+`01:25` signifie 1 minute et 25 secondes. Les minutes continuent au-delà de 59
+(par exemple `75:00`). Sur un terminal petit, il passe en affichage compact.
+Les chiffres évoluent chaque seconde : un minuteur de 5 minutes commence à
+`05:00`, puis passe à `04:59`. Le symbole `▶` indique une séance active.
+`f` arrête le focus ; `p` suspend ou reprend la
 lecture et le focus. L'aide, les menus, la veille et la perte de focus du terminal
 ne sont pas comptés. La consultation d'une figure compte tant que son aperçu
 intégré reste actif ; passer dans une fenêtre Quick Look suspend le compteur.
@@ -306,7 +306,8 @@ document** et le **temps restant estimé**, par exemple :
 Temps cumulé : 00h 12min · Reste ≈ 00h 08min auto
 ```
 
-Les durées affichées contiennent uniquement les **heures et minutes**. Le temps
+Les durées de lecture cumulées et restantes contiennent uniquement les **heures et minutes**
+(le chrono et le minuteur de focus restent en minutes:secondes). Le temps
 écoulé est arrondi à la minute inférieure ; le temps restant est arrondi à la
 minute supérieure. Le stockage et le JSON conservent les secondes pour le
 calibrage et la précision du minuteur. Le compteur se cumule entre les ouvertures du même fichier.

@@ -554,7 +554,7 @@ def run_ui(screen, text, path, memory, args, position, changed, source=None, off
             focus_large = focus.visible and height >= 14 and width >= 65
             focus_paused = paused or help_open or not window_active or position >= len(text)
             focus_marker = '✓' if focus.state == 'finished' else 'Ⅱ' if focus_paused else '▶'
-            focus_label = 'FOCUS TERMINÉ' if focus.state == 'finished' else '▶ ' + ('CHRONO' if focus.mode == 'chrono' else 'MINUTEUR') + ' · h:min'
+            focus_label = 'FOCUS TERMINÉ' if focus.state == 'finished' else '▶ ' + ('CHRONO' if focus.mode == 'chrono' else 'MINUTEUR')
             if focus.visible and focus.state == 'running' and focus_paused:
                 focus_label = ('CHRONO' if focus.mode == 'chrono' else 'MINUTEUR') + ' · pause'
             focus_lines = big_clock(focus.display) if focus_large else [focus.display]

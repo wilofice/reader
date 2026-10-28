@@ -18,7 +18,7 @@ import test_terminal
 class HabitTests(unittest.TestCase):
     def test_ui_clocks_advance_after_a_minute_and_timer_finishes_once(self):
         reader = test_reader.reader
-        for mode, ticks, expected in (('chrono', 65, '00:01'), ('timer', 65, '00:04'), ('timer', 305, '00:00')):
+        for mode, ticks, expected in (('chrono', 65, '01:05'), ('timer', 65, '03:55'), ('timer', 305, '00:00')):
             with self.subTest(mode=mode, ticks=ticks), tempfile.TemporaryDirectory() as directory:
                 now = [0.0]
                 session = FocusSession()
@@ -131,7 +131,7 @@ class HabitTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, '5 minutes'):
             focus.start('timer', 4, 100)
         focus.start('timer', 5, 100)
-        self.assertEqual(focus.display, '00:05')
+        self.assertEqual(focus.display, '05:00')
         self.assertFalse(focus.update(399.5))
         self.assertEqual(focus.display, '00:01')
         self.assertTrue(focus.update(400))
@@ -145,11 +145,13 @@ class HabitTests(unittest.TestCase):
         focus.start('chrono', 25, 100)
         focus.update(110)
         focus.update(110)  # Reading paused / help / machine sleep: total unchanged.
-        self.assertEqual(focus.display, '00:00')
+        self.assertEqual(focus.display, '00:10')
         focus.update(115)  # Five seconds inspecting a figure.
-        self.assertEqual(focus.display, '00:00')
+        self.assertEqual(focus.display, '00:15')
         focus.update(175)
-        self.assertEqual(focus.display, '00:01')
+        self.assertEqual(focus.display, '01:15')
+        focus.update(3761)
+        self.assertEqual(focus.display, '61:01')
         self.assertEqual(len(big_clock(focus.display)), 3)
         self.assertGreater(len(big_clock(focus.display)[0]), len(focus.display))
 
@@ -201,16 +203,17 @@ class HabitTests(unittest.TestCase):
             args = [str(document), '-S', str(folder / 'state.sqlite3'), '--focus-minutes', '5']
             output = terminal.session(args, [(0.3, b'q')])
             self.assertNotIn(b'FOCUS', output)
-            self.assertNotIn('CHRONO · h:min'.encode(), output)
-            self.assertNotIn('MINUTEUR · h:min'.encode(), output)
+            self.assertNotIn('▶ CHRONO'.encode(), output)
+            self.assertNotIn('▶ MINUTEUR'.encode(), output)
             output = terminal.session(args, [(0.3, b'f'), (0.2, b'c'), (0.2, b'\r'), (1.2, b'p'), (0.2, b'q')])
-            self.assertIn('CHRONO · h:min'.encode(), output)
+            self.assertIn('▶ CHRONO'.encode(), output)
+            self.assertNotIn(b'h:min', output)
             self.assertIn('█▀█'.encode(), output)
             self.assertIn(b'pause', output)
             self.assertEqual(terminal.status(args)['position'], 0)
             output = terminal.session(args, [(0.3, b'q')])
             self.assertNotIn(b'FOCUS', output)
-            self.assertNotIn('CHRONO · h:min'.encode(), output)
+            self.assertNotIn('▶ CHRONO'.encode(), output)
 
     def test_compact_and_zen_keep_controls_and_daily_counter(self):
         terminal = test_terminal.TerminalTests()
@@ -221,7 +224,7 @@ class HabitTests(unittest.TestCase):
             args = [str(document), '-S', str(folder / 'state.sqlite3'), '-z', '--focus-minutes', '5']
             output = terminal.session(args, [(0.3, b'f'), (0.2, b'\r'), (0.4, b'q')],
                                       terminal_size=(12, 50), expect_progress=False)
-            self.assertIn('Focus ▶ 00:05'.encode(), output)
+            self.assertIn('Focus ▶ 05:00'.encode(), output)
             self.assertIn(b'0/15000 mots', output)
             bad = subprocess.run([test_terminal.EXECUTABLE, *args, '--focus-minutes', '4'], capture_output=True)
             self.assertEqual(bad.returncode, 2)
