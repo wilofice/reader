@@ -49,6 +49,7 @@ class TerminalFocus:
         env = os.environ if environment is None else environment
         self.now = now or time.monotonic
         self.reported = True
+        self.received_reports = False
         self.native = None
         self.native_active = True
         self.checked = float('-inf')
@@ -61,10 +62,15 @@ class TerminalFocus:
                 pass
 
     def event(self, focused):
+        self.received_reports = True
         self.reported = focused
         self.checked = float('-inf')
 
     def focused(self):
+        # The terminal knows its own window/tab. Application identity can lag
+        # or be inherited from another terminal (for example in a multiplexer).
+        if self.received_reports:
+            return self.reported
         if not self.reported:
             return False
         now = self.now()

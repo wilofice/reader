@@ -7,7 +7,7 @@ import subprocess
 import tempfile
 import threading
 import unittest
-from unittest.mock import Mock
+from unittest.mock import Mock, patch
 
 from focus_ui import choose_focus
 from reading_habits import DailyReading, DailyWordIndex, FocusSession, big_clock
@@ -16,6 +16,63 @@ import test_terminal
 
 
 class HabitTests(unittest.TestCase):
+    def test_ui_clocks_advance_after_a_minute_and_timer_finishes_once(self):
+        reader = test_reader.reader
+        for mode, ticks, expected in (('chrono', 65, '00:01'), ('timer', 65, '00:04'), ('timer', 305, '00:00')):
+            with self.subTest(mode=mode, ticks=ticks), tempfile.TemporaryDirectory() as directory:
+                now = [0.0]
+                session = FocusSession()
+                actions = iter([(.1, ord('f')), (.1, ord('c') if mode == 'chrono' else ord('m')), (.1, 13)]
+                               + [(1, -1)] * ticks + [(.1, ord('q'))])
+                values = []
+                class Screen:
+                    def getmaxyx(self): return (12, 60)
+                    def timeout(self, value): pass
+                    def erase(self): pass
+                    def refresh(self): pass
+                    def addstr(self, y, x, value, style=0): values.append(value)
+                    def getch(self):
+                        delay, key = next(actions)
+                        now[0] += delay
+                        return key
+                path = Path(directory) / 'notes.txt'
+                text = 'Un passage à lire.\n' * 30
+                memory = reader.Memory(Path(directory) / 'state.sqlite3')
+                memory.daily.set('focus_minutes', 5)
+                args = type('Args', (), dict(auto=False, mode='words', size=20, wpm=200, zen=False))()
+                try:
+                    with patch.object(reader.time, 'monotonic', side_effect=lambda: now[0]), \
+                            patch.object(reader, 'FocusSession', return_value=session), \
+                            patch.object(reader, 'terminal_accent', return_value=0), \
+                            patch.object(reader.curses, 'beep') as beep:
+                        reader.run_ui(Screen(), text, path, memory, args, 0, False)
+                    self.assertEqual(session.display, expected)
+                    self.assertTrue(any(expected in value for value in values if value.startswith('Focus ')))
+                    self.assertEqual(beep.call_count, int(ticks >= 300))
+                finally:
+                    memory.close()
+
+    def test_starting_focus_explicitly_resumes_a_paused_reading(self):
+        terminal = test_terminal.TerminalTests()
+        with tempfile.TemporaryDirectory() as directory:
+            folder = Path(directory)
+            document = folder / 'notes.txt'
+            document.write_text('Lecture attentive.\n' * 20)
+            args = [str(document), '-S', str(folder / 'state.sqlite3')]
+            terminal.session(args, [(.3, b'p'), (.2, b'f'), (.2, b'c'), (.2, b'\r'), (1.3, b'q')])
+            self.assertGreater(terminal.status(args)['reading_seconds'], 1)
+
+    def test_finished_document_explains_how_to_resume_before_starting_focus(self):
+        terminal = test_terminal.TerminalTests()
+        with tempfile.TemporaryDirectory() as directory:
+            folder = Path(directory)
+            document = folder / 'notes.txt'
+            document.write_text('Un texte court.')
+            args = [str(document), '-S', str(folder / 'state.sqlite3')]
+            output = terminal.session(args, [(.3, b'n'), (.2, b'f'), (.2, b'q')])
+            self.assertIn('b pour revoir, N pour relire'.encode(), output)
+            self.assertEqual(terminal.status(args)['percent'], 100)
+
     def test_daily_intervals_deduplicate_overlap_and_persist(self):
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / 'state.sqlite3'
@@ -164,7 +221,7 @@ class HabitTests(unittest.TestCase):
             args = [str(document), '-S', str(folder / 'state.sqlite3'), '-z', '--focus-minutes', '5']
             output = terminal.session(args, [(0.3, b'f'), (0.2, b'\r'), (0.4, b'q')],
                                       terminal_size=(12, 50), expect_progress=False)
-            self.assertIn(b'Focus 00:05', output)
+            self.assertIn('Focus ▶ 00:05'.encode(), output)
             self.assertIn(b'0/15000 mots', output)
             bad = subprocess.run([test_terminal.EXECUTABLE, *args, '--focus-minutes', '4'], capture_output=True)
             self.assertEqual(bad.returncode, 2)

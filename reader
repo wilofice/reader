@@ -552,11 +552,13 @@ def run_ui(screen, text, path, memory, args, position, changed, source=None, off
                 focus_delay = None
             window_was_active = window_active
             focus_large = focus.visible and height >= 14 and width >= 65
-            focus_label = 'FOCUS TERMINÉ' if focus.state == 'finished' else ('CHRONO' if focus.mode == 'chrono' else 'MINUTEUR') + ' · h:min'
-            if focus.visible and focus.state == 'running' and (paused or help_open or not window_active or position >= len(text)):
+            focus_paused = paused or help_open or not window_active or position >= len(text)
+            focus_marker = '✓' if focus.state == 'finished' else 'Ⅱ' if focus_paused else '▶'
+            focus_label = 'FOCUS TERMINÉ' if focus.state == 'finished' else '▶ ' + ('CHRONO' if focus.mode == 'chrono' else 'MINUTEUR') + ' · h:min'
+            if focus.visible and focus.state == 'running' and focus_paused:
                 focus_label = ('CHRONO' if focus.mode == 'chrono' else 'MINUTEUR') + ' · pause'
             focus_lines = big_clock(focus.display) if focus_large else [focus.display]
-            focus_width = max(map(len, [focus_label] + focus_lines)) if focus_large else len('Focus ' + focus.display)
+            focus_width = max(map(len, [focus_label] + focus_lines)) if focus_large else len(f'Focus {focus_marker} {focus.display}')
             focus_left = max(0, width - focus_width - 2)
 
             def put(y, value, style=0, x=0, chrome=True):
@@ -756,7 +758,7 @@ def run_ui(screen, text, path, memory, args, position, changed, source=None, off
                     for row, line in enumerate(focus_lines, 1):
                         put(row, line, accent | curses.A_BOLD, x=focus_left, chrome=False)
                 else:
-                    put(0, 'Focus ' + focus.display, accent | curses.A_BOLD, x=focus_left, chrome=False)
+                    put(0, f'Focus {focus_marker} {focus.display}', accent | curses.A_BOLD, x=focus_left, chrome=False)
             screen.refresh()
             wait_ms = 1000
             if visual_pending and window_active:
@@ -827,6 +829,8 @@ def run_ui(screen, text, path, memory, args, position, changed, source=None, off
                 if focus.visible:
                     focus.stop()
                     notice = 'Focus arrêté.'
+                elif done:
+                    notice = 'Lecture terminée : b pour revoir, N pour relire, puis f.'
                 else:
                     clock.configure(False, not auto)
                     save(force=True)
@@ -837,6 +841,7 @@ def run_ui(screen, text, path, memory, args, position, changed, source=None, off
                         memory.daily.set('focus_mode', mode)
                         memory.daily.set('focus_minutes', minutes)
                         focus.start(mode, minutes, stats.seconds)
+                        paused = False
                         notice = 'Focus actif · f arrêter · p pause.'
                 deadline = None
                 clock.reset_passage()

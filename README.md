@@ -105,10 +105,15 @@ Le focus est **désactivé à l'ouverture**. Appuyez sur `f`, puis choisissez
 `c` pour un chrono (temps écoulé) ou `m` pour un minuteur (temps restant).
 Entrée démarre ; Échap annule. Dans ce menu, `j` / `k` règlent le minuteur
 par pas de 5 minutes : **minimum 5 minutes**, 25 minutes par défaut.
+Démarrer une séance reprend une lecture mise en pause. Si le document est
+terminé, revenez avec `b` ou commencez une nouvelle lecture avec `N`, puis `f`.
 
 Le temps apparaît en grands chiffres **heures:minutes**, avec la mention `h:min`,
 en haut à droite : `01:25` signifie 1 heure et 25 minutes. Sur un terminal petit,
-il passe en affichage compact. `f` arrête le focus ; `p` suspend ou reprend la
+il passe en affichage compact. **Les chiffres changent une fois par minute** :
+le chrono reste à `00:00` pendant sa première minute ; un minuteur de 5 minutes
+reste à `00:05`, puis passe à `00:04`. Le symbole `▶` indique une séance active,
+même entre deux changements de minute. `f` arrête le focus ; `p` suspend ou reprend la
 lecture et le focus. L'aide, les menus, la veille et la perte de focus du terminal
 ne sont pas comptés. La consultation d'une figure compte tant que son aperçu
 intégré reste actif ; passer dans une fenêtre Quick Look suspend le compteur.
@@ -314,8 +319,10 @@ Les longues suspensions du processus entre deux mises à jour sont ignorées.
 
 Les terminaux compatibles signalent les changements de focus par le
 [protocole xterm 1004](https://invisible-island.net/xterm/ctlseqs/ctlseqs.html).
-Sur macOS local, iTerm2 et Terminal.app disposent aussi d'un contrôle natif
-de l'application au premier plan, vérifié au plus une fois par seconde.
+Avant réception d'événements de focus, iTerm2 et Terminal.app sur macOS local
+disposent aussi d'un contrôle natif de l'application au premier plan, vérifié au
+plus une fois par seconde. Dès qu'ils sont reçus, les événements du terminal
+font foi : une identité d'application héritée ou périmée ne doit pas les contredire.
 Ce complément ne nécessite ni AppleScript ni permission d'accessibilité ; il
 ne distingue pas les onglets d'une même application, contrairement aux événements
 de focus du terminal. Sur un terminal ou un multiplexeur qui ne transmet pas ces

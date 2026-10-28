@@ -12,6 +12,18 @@ import test_terminal
 
 
 class FocusTests(unittest.TestCase):
+    def test_explicit_terminal_focus_overrides_stale_native_application_identity(self):
+        native = Mock()
+        native.bundle.return_value = 'com.apple.Terminal'
+        with patch.object(terminal_focus.sys, 'platform', 'darwin'), \
+                patch.object(terminal_focus, 'MacForeground', return_value=native):
+            state = TerminalFocus(environment={'TERM_PROGRAM': 'iTerm.app'})
+            self.assertFalse(state.focused())
+            state.event(True)
+            self.assertTrue(state.focused())
+            state.event(False)
+            self.assertFalse(state.focused())
+
     def test_focus_protocol_does_not_quit_or_consume_other_keys(self):
         state = TerminalFocus(environment={})
         screen = Mock()
