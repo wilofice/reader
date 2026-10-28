@@ -43,12 +43,12 @@ brew install gh
 gh auth login
 gh repo clone wilofice/reader
 cd reader
-git switch codex/next-iteration
+git switch main
 ./install.sh
 ./reader README.md
 ```
 
-La commande d'installation est actuellement sur la branche `codex/next-iteration`.
+Les fonctionnalités et commandes documentées sont disponibles sur la branche `main`.
 Le dépôt est privé : authentifiez-vous avec un compte qui y a accès. Si Git et
 votre accès GitHub sont déjà configurés, vous pouvez aussi utiliser
 `git clone git@github.com:wilofice/reader.git`. Poppler est facultatif si vous ne
