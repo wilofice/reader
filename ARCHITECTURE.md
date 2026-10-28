@@ -14,6 +14,10 @@ avec Quick Look comme solution macOS complémentaire.
 - `visual_hints.py` : analyse structurelle Poppler en arrière-plan, indices
   par page et cache identifié par l'empreinte du PDF complet.
 - `pdf_preview.py` : rendu de la page, zoom et affichage iTerm2 ou Quick Look.
+- `formula_index.py` : lecture du cache et gestion d'un processus de préparation
+  indépendant de `curses`, avec priorité aux pages affichées.
+- `layout_worker.py` : typographie PyMuPDF et modèle local DocLayout-YOLO dans
+  `.venv-layout` ; cache versionné défini par `formula_cache.py`.
 
 Le repérage est indépendant de la taille des passages. L'interface associe les
 pages couvertes par le texte affiché à leurs indices. Une mention textuelle
@@ -45,8 +49,12 @@ du passage avant d'ouvrir l'aperçu. Les images Markdown locales sont consultabl
 avec les mêmes moteurs d'affichage. `reading_media.py` extrait leurs références
 et fournit le menu commun ; les fichiers distants ne sont pas téléchargés.
 
-La prochaine étape consiste à évaluer la fiabilité sur images, tableaux à bordures,
-graphes vectoriels, petites formules et pages scannées avant d'ajouter un modèle.
+Le moteur enrichi est désormais facultatif. Il prépare les pages progressivement,
+conserve leurs références et se termine à la fermeture du lecteur. Le mode
+`--prepare` remplit le même cache sans ouvrir SQLite. Les modèles, environnements
+et rendus ne sont pas versionnés. La validation couvre des pages de formules
+manquées auparavant et une page rasterisée pour simuler un scan ; l'amélioration
+du rappel et des fausses alertes sur d'autres documents reste à évaluer.
 
 La voix et les enrichissements pédagogiques viendront ensuite comme services
 optionnels de la session ; ils ne doivent pas conditionner la lecture simple.

@@ -68,6 +68,11 @@ fi''')
             self.assertEqual(result.returncode, 0, result.stderr)
         self.assertFalse(self.log.exists())
 
+    def test_layout_option_rejects_extra_arguments_before_any_install(self):
+        result = self.run_installer('--layout', '--check')
+        self.assertEqual(result.returncode, 2)
+        self.assertFalse(self.log.exists())
+
     def test_installs_only_missing_package_and_can_be_rerun(self):
         self.ready("python", "poppler")
         result = self.run_installer()

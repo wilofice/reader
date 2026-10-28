@@ -60,6 +60,8 @@ def image_count(listing, page_area):
 
 
 def label(hint):
+    if hint.get('formulas'):
+        return 'Image et formules probables' if hint['images'] else 'Formule(s) probable(s)'
     if hint.get("error"):
         return "Référence " + hint["mention"] if hint.get("mention") else ""
     if hint["images"]:

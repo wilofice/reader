@@ -4,11 +4,17 @@ set -euo pipefail
 
 check_only=0
 case "${1:-}" in
+    --layout)
+        if [ "$#" -gt 1 ]; then printf '%s\n' 'Une seule option est acceptée.' >&2; exit 2; fi
+        /bin/bash "$0"
+        exec /bin/bash "$(dirname "$0")/install-layout.sh"
+        ;;
     --check) check_only=1 ;;
     -h|--help)
-        printf '%s\n' 'Usage : ./install.sh [--check]' \
+        printf '%s\n' 'Usage : ./install.sh [--check | --layout]' \
             'Installe les dépendances macOS manquantes : Python 3.10+, Poppler, Chafa.' \
-            '--check : vérifier seulement, sans installation ni accès réseau.'
+            '--check : vérifier seulement, sans installation ni accès réseau.' \
+            '--layout : installer aussi le modèle local de repérage des formules.'
         exit 0 ;;
     '') ;;
     *) printf 'Option inconnue : %s\n' "$1" >&2; exit 2 ;;

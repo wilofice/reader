@@ -23,6 +23,7 @@ import unicodedata
 from pdf_preview import inspect_pdf, inspect_image
 from reading_media import markdown_images, choose_media
 from visual_hints import PdfVisualIndex, label as visual_label
+from formula_index import FormulaIndex, EnrichedIndex, available as formulas_available, prepare_document
 
 
 # Devise de Reader choisie par l'utilisateur, sans attribution à un auteur.
@@ -626,6 +627,10 @@ def run_ui(screen, text, path, memory, args, position, changed, source=None, off
                         info += [f"Page {item['page']} : {item['images']} image(s), {item['paths']} indice(s) de tracés."]
                         if item.get("error"):
                             info += ["Analyse indisponible ou incomplète : " + item["error"]]
+                        if 'formulas' in item:
+                            info += [f"Formules : {item['formulas']} zone(s) probable(s) · méthode {item['formula_method']}"]
+                        if item.get('formula_error'):
+                            info += ['Repérage des formules : ' + item['formula_error']]
                     info += ["Une référence textuelle peut renvoyer à une autre page.",
                              "L'absence d'indicateur ne garantit pas l'absence de figure."]
                 else:
@@ -648,7 +653,7 @@ def run_ui(screen, text, path, memory, args, position, changed, source=None, off
                     if body_height > 1:
                         put(body_start + 1, "g / b : revoir dans ce cycle", x=body_left, chrome=False)
             if page_starts and not help_open:
-                unavailable = any(item.get("error") for item in visual_pages)
+                unavailable = any(item.get("error") or item.get('formula_error') for item in visual_pages)
                 page_status = f"Page(s) PDF {page_label}/{len(page_starts)} · v image · i référence"
                 if visual_pending:
                     page_status += " · analyse…"
@@ -811,6 +816,8 @@ def main(argv=None):
     parser.add_argument("--new-reading", action="store_true", help="commencer un nouveau cycle après avoir terminé le précédent")
     parser.add_argument("--readings", action="store_true", help="afficher les cycles de lecture du document")
     parser.add_argument("--no-visual-hints", action="store_true", help="désactiver le repérage local des images et tracés PDF")
+    parser.add_argument('--formulas', choices=('auto', 'off', 'text', 'model', 'hybrid'), default='auto', help='repérage des formules PDF (auto si installé)')
+    parser.add_argument('--prepare', action='store_true', help='préparer le cache enrichi du PDF, sans ouvrir la mémoire de lecture')
     parser.add_argument("-e", "--encoding", default="utf-8-sig", help="encodage du texte (défaut : UTF-8)")
     parser.add_argument("-R", "--raw", action="store_true", help="afficher le code source des fichiers Markdown au lieu de l'aperçu")
     parser.add_argument("-S", "--state", type=Path, default=state_path(), help="chemin de la base SQLite")
@@ -823,9 +830,13 @@ def main(argv=None):
         parser.error("--new-reading s'utilise seul avec les options de lecture")
     if not args.file and not args.history:
         parser.error("indiquez un fichier ou --history")
+    if args.prepare and (not args.file or args.history or args.status or args.readings or args.new_reading):
+        parser.error('--prepare nécessite un PDF et s’utilise sans option de mémoire')
     memory = None
     visual_index = None
     try:
+        if args.prepare:
+            return prepare_document(args.file.expanduser().resolve(strict=True), args.formulas)
         memory = Memory(args.state)
         if args.history:
             for path, position, length, updated, seconds in memory.history():
@@ -876,7 +887,17 @@ def main(argv=None):
         locale.setlocale(locale.LC_ALL, "")
         terminal_settings = termios.tcgetattr(sys.stdin.fileno())
         if page_starts and not args.no_visual_hints:
+            if args.formulas not in ('auto', 'off') and not formulas_available(args.formulas):
+                raise ValueError('Repérage enrichi absent : lancez ./install.sh --layout.')
             visual_index = PdfVisualIndex(path, source, page_starts)
+            if formulas_available(args.formulas):
+                try:
+                    visual_index = EnrichedIndex(visual_index, FormulaIndex(
+                        path, visual_index.folder.name,
+                        min(len(page_starts), bisect_right(page_starts, source_position)), args.formulas,
+                        signature=visual_index.signature))
+                except OSError as error:
+                    print(f'Repérage enrichi indisponible : {error}', file=sys.stderr)
         try:
             curses.wrapper(run_ui, text, path, memory, args, 0 if args.restart else position, changed, source, offsets, stats, page_starts, visual_index)
         finally:
@@ -884,7 +905,8 @@ def main(argv=None):
         print(f"Position sauvegardée dans {args.state.expanduser()}")
         return 0
     except KeyboardInterrupt:
-        print("\nLecture interrompue ; position sauvegardée.")
+        print('\nPréparation interrompue ; pages déjà préparées conservées.' if args.prepare
+              else "\nLecture interrompue ; position sauvegardée.")
         return 130
     except (OSError, ValueError, LookupError, sqlite3.Error, curses.error) as error:
         print(f"reader : {error}", file=sys.stderr)

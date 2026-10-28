@@ -439,6 +439,60 @@ tableau sans bordures. Les caractères définis comme glyphes SVG sont exclus du
 comptage des tracés. L'absence d'indicateur ne garantit pas l'absence d'objet.
 Pour désactiver l'analyse : `./reader "document.pdf" --no-visual-hints`.
 
+#### Repérage des formules PDF (facultatif)
+
+Installez le moteur enrichi une seule fois sur chaque Mac :
+
+```sh
+./install.sh --layout
+./reader "document.pdf"
+```
+
+L'installation crée `.venv-layout`, installe les dépendances de
+`requirements-layout.txt` et télécharge le modèle DocLayout-YOLO (~41 Mo).
+L'environnement complet occupait environ 1,2 Go sur la machine de test Apple
+Silicon. Le lecteur simple conserve ses dépendances habituelles.
+Sous Linux, installez les dépendances de base puis lancez `./install-layout.sh`.
+Le moteur optionnel utilise Python 3.10 à 3.13 ; l'installateur macOS peut
+installer Python 3.12 si nécessaire. La pile testée utilise macOS 14+ sur ARM64.
+
+Après installation, les PDF sont préparés en arrière-plan : pages visibles
+prioritaires, puis document entier. La lecture peut commencer immédiatement.
+Le bandeau peut afficher `Formule(s) probable(s) · p. PDF 293 · v voir` ; `i`
+indique la méthode et les éventuels échecs. `v` ouvre toujours la page originale.
+
+Pour préparer le document avant lecture, sans ouvrir la base de progression :
+
+```sh
+./reader "document.pdf" --prepare
+./reader "document.pdf" --formulas off    # garder seulement images et tracés
+./reader "document.pdf" --formulas text   # typographie, sans charger le modèle
+./reader "document.pdf" --formulas model  # modèle visuel seul
+```
+
+`--formulas auto`, par défaut, active la combinaison typographie + modèle
+lorsque l'installation est prête. Sans moteur installé, la lecture habituelle
+reste disponible. Le téléchargement est réservé à l'installation ; la
+préparation désactive les connexions réseau Python du moteur. Le modèle est
+lié à une révision et une empreinte SHA-256 vérifiées. Aucun service payant
+n'est utilisé. CUDA ou le GPU Apple sont sélectionnés lorsqu'ils sont disponibles,
+avec retour au CPU si une opération accélérée échoue.
+
+Les résultats sont conservés sous
+`~/.cache/reader/formulas-v1/<méthode-modèle>/<empreinte PDF>/`, ou sous
+`$XDG_CACHE_HOME/reader/`. Fermer le lecteur arrête son calcul ; rouvrir reprend
+les pages manquantes. Les préparations simultanées d'un même cache partagent
+un verrou. Effacer ce cache ne supprime pas la progression SQLite.
+
+Le repérage reste probabiliste : il peut manquer des expressions inline ou
+confondre des affectations de pseudocode avec des formules. Les zones ne sont
+pas un comptage exact des équations. Le moteur visuel peut traiter une page
+scannée ; **la lecture du texte d'un PDF entièrement scanné nécessite toujours
+un OCR préalable**. Cette version ne transcrit ni n'explique les formules, et
+ne traite pas les expressions LaTeX des Markdown.
+Le [compte rendu du repérage des formules](RAPPORT-FORMULES.md) donne les cas
+contrôlés, les signalements sur le livre entier et les coûts observés.
+
 ```sh
 brew install poppler chafa
 ./reader "document.pdf"

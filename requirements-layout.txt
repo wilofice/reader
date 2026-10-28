@@ -1,0 +1,5 @@
+# Dépendances facultatives, isolées dans .venv-layout.
+doclayout-yolo==0.0.4
+PyMuPDF==1.26.7
+torch==2.14.1
+torchvision==0.29.1
