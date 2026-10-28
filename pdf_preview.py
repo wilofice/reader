@@ -262,7 +262,7 @@ def inspect_pdf(screen, path, number, total, requested="auto", cache_root=None, 
                     else:
                         put(1, f"Image de la page originale · protocole {output_format}")
                     put(height - 2, "+/- zoom · flèches déplacer · n/b pages · 0 ajuster")
-                    put(height - 1, "p pause compteur · v/Échap retour · q quitter l'aperçu" + (" · PAUSE" if paused else ""))
+                    put(height - 1, "Espace/p pause compteur · v/Échap retour · q quitter l'aperçu" + (" · PAUSE" if paused else ""))
                     if width >= 35 and height >= 8:
                         put(3, "Préparation de l'image…")
                         screen.refresh()
@@ -314,7 +314,7 @@ def inspect_pdf(screen, path, number, total, requested="auto", cache_root=None, 
                     zoom, x, y = 1, 0, 0
                 elif key == ord("0"):
                     zoom, x, y = 1, 0, 0
-                elif key == ord("p"):
+                elif key in (ord(' '), ord('p'), ord('P')):
                     paused = not paused
                 elif key == curses.KEY_RIGHT:
                     x += max(1, base_width // 4)

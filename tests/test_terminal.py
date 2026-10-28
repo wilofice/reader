@@ -18,6 +18,36 @@ EXECUTABLE = str(Path(__file__).resolve().parents[1] / "reader")
 
 
 class TerminalTests(unittest.TestCase):
+    def test_space_pauses_manual_reading_without_advancing_and_p_remains_an_alias(self):
+        with tempfile.TemporaryDirectory() as directory:
+            folder = Path(directory)
+            document = folder / 'notes.txt'
+            document.write_text('un deux trois quatre cinq six')
+            args = [str(document), '-S', str(folder / 'state.sqlite3'), '-m', 'w', '-s', '2']
+            self.session(args, [(.3, b' '), (1.1, b'q')])
+            first = self.status(args)
+            self.assertEqual(first['position'], 0)
+            self.assertEqual(first['daily_words'], 0)
+            self.assertLess(first['reading_seconds'], .9)
+            self.session(args, [(.3, b'P'), (.4, b' '), (1.1, b'p'), (.5, b'q')])
+            second = self.status(args)
+            self.assertEqual(second['position'], 0)
+            self.assertGreater(second['reading_seconds'] - first['reading_seconds'], 1)
+            self.assertLess(second['reading_seconds'] - first['reading_seconds'], 2)
+            self.session(args, [(.3, b'n'), (.2, b'q')])
+            self.assertEqual(self.status(args)['daily_words'], 2)
+
+    def test_space_pauses_and_resumes_automatic_progress(self):
+        with tempfile.TemporaryDirectory() as directory:
+            folder = Path(directory)
+            document = folder / 'notes.txt'
+            document.write_text('un deux trois quatre cinq six sept huit')
+            args = [str(document), '-S', str(folder / 'state.sqlite3'), '-m', 'w', '-s', '2', '-a', '-w', '120']
+            self.session(args, [(.2, b' '), (1.2, b'q')])
+            self.assertEqual(self.status(args)['position'], 0)
+            self.session(args, [(.2, b'p'), (1.1, b' '), (1.2, b'q')])
+            self.assertGreater(self.status(args)['position'], 0)
+
     def session(self, args, actions, terminal_size=(24, 80), expect_progress=True):
         master, slave = pty.openpty()
         fcntl.ioctl(slave, termios.TIOCSWINSZ, struct.pack("HHHH", *terminal_size, 0, 0))

@@ -113,7 +113,7 @@ Le temps apparaît en grands chiffres **minutes:secondes**, en haut à droite :
 (par exemple `75:00`). Sur un terminal petit, il passe en affichage compact.
 Les chiffres évoluent chaque seconde : un minuteur de 5 minutes commence à
 `05:00`, puis passe à `04:59`. Le symbole `▶` indique une séance active.
-`f` arrête le focus ; `p` suspend ou reprend la
+`f` arrête le focus ; Espace, `p` et `P` suspendent ou reprennent la
 lecture et le focus. L'aide, les menus, la veille et la perte de focus du terminal
 ne sont pas comptés. La consultation d'une figure compte tant que son aperçu
 intégré reste actif ; passer dans une fenêtre Quick Look suspend le compteur.
@@ -273,8 +273,7 @@ Toutes les anciennes formes restent acceptées. Par exemple,
 | --- | --- |
 | `n`, Entrée, flèche droite/bas | Avancer |
 | `b`, flèche gauche/haut | Revenir et suspendre l'avance automatique |
-| Espace | Pause / reprise en automatique ; avancer en manuel, ou reprendre si en pause |
-| `p` | Mettre en pause / reprendre dans tous les modes, y compris le comptage du temps |
+| Espace, `p`, `P` | Pause / reprise dans tous les modes de lecture, y compris le focus et le comptage du temps ; n'avance pas en manuel |
 | `f` | Choisir un chrono ou un minuteur ; arrêter le focus s'il est déjà affiché |
 | `a` | Activer ou suspendre l'automatique |
 | `+`, `-` | Modifier la vitesse de 25 mots/minute |
@@ -333,7 +332,8 @@ de focus du terminal. Sur un terminal ou un multiplexeur qui ne transmet pas ces
 tant que le terminal est actif. Appuyez sur `p` si vous vous interrompez en le
 laissant au premier plan. Ce compteur reste une estimation, sans mesure de
 l'attention ni de la compréhension.
-Espace reprend une lecture en pause ; `n` avance et reprend aussi la lecture.
+Espace, `p` et `P` suspendent ou reprennent la lecture. Pour avancer en manuel,
+utilisez `n`, Entrée ou les flèches. `n` avance et reprend aussi la lecture.
 
 La boucle d'affichage attend normalement jusqu'à une seconde entre deux mises
 à jour, au lieu de dix réveils par seconde. Une touche ou un événement de focus
@@ -343,7 +343,7 @@ automatique et pendant une analyse visuelle en cours.
 | Mode | Calcul de l'estimation |
 | --- | --- |
 | Automatique (`-a` ou `-m s`) | Nombre de mots restant à afficher, divisé par la vitesse `-w` ; le délai du passage courant diminue pendant son affichage |
-| Manuel | Rythme observé sur les passages avancés avec `n`, Entrée, les flèches ou Espace, et le temps actif passé sur ces passages |
+| Manuel | Rythme observé sur les passages avancés avec `n`, Entrée ou les flèches, et le temps actif passé sur ces passages |
 | Manuel sans observations suffisantes | Affichage « calibrage », sans durée inventée à partir de la vitesse automatique |
 
 En manuel, le calibrage demande au moins **20 mots et 10 secondes cumulés sur
