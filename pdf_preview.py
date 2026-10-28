@@ -10,6 +10,7 @@ import subprocess
 import sys
 import tempfile
 import time
+from terminal_focus import is_focused
 
 
 def graphics_format(requested="auto", environment=None):
@@ -114,17 +115,18 @@ def inspect_quicklook(screen, image, number, total, on_time=None, title=None):
         except curses.error:
             pass
     screen.refresh()
-    screen.timeout(100)
+    screen.timeout(500)
     seconds = 0.0
     with tempfile.TemporaryFile() as errors:
         process = subprocess.Popen(["qlmanage", "-p", str(image)], stdin=subprocess.DEVNULL,
                                    stdout=subprocess.DEVNULL, stderr=errors)
         try:
             while process.poll() is None:
+                focused_before = is_focused(screen)
                 before = time.monotonic()
                 key = screen.getch()
                 elapsed = time.monotonic() - before
-                if 0 <= elapsed <= 3:
+                if 0 <= elapsed <= 3 and focused_before and is_focused(screen):
                     seconds += elapsed
                     if on_time is not None:
                         on_time(elapsed)
@@ -163,7 +165,7 @@ def inspect_image(screen, path, requested="auto", on_time=None):
         raise ValueError('Aperçu intégré : installez Chafa avec `brew install chafa`.')
     dirty = True
     seconds = 0.0
-    screen.timeout(100)
+    screen.timeout(1000)
 
     def clear():
         if output_format == 'kitty':
@@ -191,10 +193,11 @@ def inspect_image(screen, path, requested="auto", on_time=None):
                     sys.stdout.buffer.write(payload)
                     sys.stdout.buffer.flush()
                 dirty = False
+            focused_before = is_focused(screen)
             before = time.monotonic()
             key = screen.getch()
             elapsed = time.monotonic() - before
-            if height >= 8 and width >= 35 and 0 <= elapsed <= 3:
+            if height >= 8 and width >= 35 and 0 <= elapsed <= 3 and focused_before and is_focused(screen):
                 seconds += elapsed
                 if on_time:
                     on_time(elapsed)
@@ -231,7 +234,7 @@ def inspect_pdf(screen, path, number, total, requested="auto", cache_root=None, 
     zoom, x, y = 1, 0, 0
     dirty, paused = True, False
     inspection_seconds = 0.0
-    screen.timeout(100)
+    screen.timeout(1000)
 
     def clear_graphics():
         # Clear our alternate-screen view before replacing or leaving an image.
@@ -284,10 +287,11 @@ def inspect_pdf(screen, path, number, total, requested="auto", cache_root=None, 
                         put(3, "Agrandissez le terminal (35 × 8 min).")
                         screen.refresh()
                     dirty = False
+                focused_before = is_focused(screen)
                 before = time.monotonic()
                 key = screen.getch()
                 elapsed = time.monotonic() - before
-                if not paused and width >= 35 and height >= 8 and elapsed <= 3:
+                if not paused and width >= 35 and height >= 8 and elapsed <= 3 and focused_before and is_focused(screen):
                     inspection_seconds += max(0, elapsed)
                     if on_time is not None:
                         on_time(max(0, elapsed))

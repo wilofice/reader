@@ -106,10 +106,13 @@ Le focus est **désactivé à l'ouverture**. Appuyez sur `f`, puis choisissez
 Entrée démarre ; Échap annule. Dans ce menu, `j` / `k` règlent le minuteur
 par pas de 5 minutes : **minimum 5 minutes**, 25 minutes par défaut.
 
-Le temps apparaît en grands chiffres en haut à droite. Sur un terminal petit,
+Le temps apparaît en grands chiffres **heures:minutes**, avec la mention `h:min`,
+en haut à droite : `01:25` signifie 1 heure et 25 minutes. Sur un terminal petit,
 il passe en affichage compact. `f` arrête le focus ; `p` suspend ou reprend la
-lecture et le focus. L'aide, les menus et la veille ne sont pas comptés ; le
-temps de consultation des figures l'est. À zéro, le minuteur reste visible avec
+lecture et le focus. L'aide, les menus, la veille et la perte de focus du terminal
+ne sont pas comptés. La consultation d'une figure compte tant que son aperçu
+intégré reste actif ; passer dans une fenêtre Quick Look suspend le compteur.
+À zéro, le minuteur reste visible avec
 « FOCUS TERMINÉ » et une sonnerie terminal unique, si elle est prise en charge.
 La lecture peut continuer ; `f` ferme le minuteur terminé.
 
@@ -295,21 +298,39 @@ Une ligne au-dessus de la barre de progression affiche le **temps cumulé sur ce
 document** et le **temps restant estimé**, par exemple :
 
 ```text
-Temps cumulé : 12:34 · Reste ≈ 08:20 auto
+Temps cumulé : 00h 12min · Reste ≈ 00h 08min auto
 ```
 
-Les durées sont au format `minutes:secondes`, puis `heures:minutes:secondes`
-au-delà d'une heure. Le compteur se cumule entre les ouvertures du même fichier.
+Les durées affichées contiennent uniquement les **heures et minutes**. Le temps
+écoulé est arrondi à la minute inférieure ; le temps restant est arrondi à la
+minute supérieure. Le stockage et le JSON conservent les secondes pour le
+calibrage et la précision du minuteur. Le compteur se cumule entre les ouvertures du même fichier.
 Il compte le temps pendant lequel le texte est disponible à la lecture, en
 manuel comme en automatique. Il s'arrête pendant une pause, dans l'aide, quand
-la fenêtre est trop petite pour afficher le texte et après la fin du document.
+la fenêtre est trop petite pour afficher le texte, lorsque le terminal perd le
+focus et après la fin du document. L'avance automatique est également suspendue
+en arrière-plan ; elle retrouve le délai restant au retour.
 Les longues suspensions du processus entre deux mises à jour sont ignorées.
 
-**Appuyez sur `p` lorsque vous interrompez votre lecture**, même en manuel.
-Le programme ne sait pas si vous regardez encore le terminal : une fenêtre
-laissée ouverte sans pause peut donc continuer à compter. Ce compteur est une
-estimation du temps consacré, sans mesure de l'attention ni de la compréhension.
+Les terminaux compatibles signalent les changements de focus par le
+[protocole xterm 1004](https://invisible-island.net/xterm/ctlseqs/ctlseqs.html).
+Sur macOS local, iTerm2 et Terminal.app disposent aussi d'un contrôle natif
+de l'application au premier plan, vérifié au plus une fois par seconde.
+Ce complément ne nécessite ni AppleScript ni permission d'accessibilité ; il
+ne distingue pas les onglets d'une même application, contrairement aux événements
+de focus du terminal. Sur un terminal ou un multiplexeur qui ne transmet pas ces
+événements, la détection peut être partielle ; `p` reste disponible.
+
+**Ne pas toucher au clavier reste compatible avec la lecture** : le temps compte
+tant que le terminal est actif. Appuyez sur `p` si vous vous interrompez en le
+laissant au premier plan. Ce compteur reste une estimation, sans mesure de
+l'attention ni de la compréhension.
 Espace reprend une lecture en pause ; `n` avance et reprend aussi la lecture.
+
+La boucle d'affichage attend normalement jusqu'à une seconde entre deux mises
+à jour, au lieu de dix réveils par seconde. Une touche ou un événement de focus
+la réveille immédiatement ; l'attente est raccourcie pour respecter la vitesse
+automatique et pendant une analyse visuelle en cours.
 
 | Mode | Calcul de l'estimation |
 | --- | --- |

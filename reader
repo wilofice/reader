@@ -26,6 +26,8 @@ from visual_hints import PdfVisualIndex, label as visual_label
 from formula_index import FormulaIndex, EnrichedIndex, available as formulas_available, prepare_document
 from reading_habits import DailyReading, DailyWordIndex, FocusSession, big_clock
 from focus_ui import choose_focus
+from terminal_focus import (TerminalFocus, FocusScreen, FOCUS_EVENT, is_focused,
+                            enable_reports, disable_reports)
 
 
 # Devise de Reader choisie par l'utilisateur, sans attribution à un auteur.
@@ -65,8 +67,8 @@ class Memory:
 
         self.daily = DailyReading(self.db)
 
-    def cycles(self, path, text):
-        digest = hashlib.sha256(text.encode("utf-8")).hexdigest()
+    def cycles(self, path, text, digest=None):
+        digest = digest or hashlib.sha256(text.encode("utf-8")).hexdigest()
         return self.db.execute("""SELECT number, completed, seconds, historical, started, finished
             FROM reading_cycles WHERE path = ? AND digest = ? ORDER BY number""",
             (str(path), digest)).fetchall()
@@ -153,7 +155,7 @@ class ReadingStats:
 
 class ReadingClock:
     """Count visible reading time and calibrate only completed manual passages."""
-    def __init__(self, stats, now=None):
+    def __init__(self, stats, now=None, focused=None):
         self.stats = stats
         self.now = now or time.monotonic
         self.last_tick = self.now()
@@ -161,16 +163,20 @@ class ReadingClock:
         self.manual = None
         self.passage_seconds = 0.0
         self.sample_valid = True
+        self.focused = focused or (lambda: True)
+        self.was_focused = self.focused()
 
     def tick(self):
         current = self.now()
         elapsed = max(0, current - self.last_tick)
         self.last_tick = current
-        # A normal UI tick is about 0.1 s. Ignore process suspension / sleep.
-        if self.active and elapsed <= 3:
+        focused = self.focused()
+        # Ignore suspension/sleep and the intervals that cross a focus transition.
+        if self.active and elapsed <= 3 and focused and self.was_focused:
             self.stats.seconds += elapsed
             if self.manual:
                 self.passage_seconds += elapsed
+        self.was_focused = focused
 
     def configure(self, active, manual):
         self.tick()
@@ -217,10 +223,9 @@ def remaining_estimate(words, position, stats, auto, speed, step=None, delay=Non
 
 
 def duration(seconds, rounded_up=False):
-    seconds = max(0, math.ceil(seconds) if rounded_up else int(seconds))
-    minutes, seconds = divmod(seconds, 60)
+    minutes = max(0, math.ceil(seconds / 60) if rounded_up else int(seconds // 60))
     hours, minutes = divmod(minutes, 60)
-    return f"{hours:d}:{minutes:02d}:{seconds:02d}" if hours else f"{minutes:02d}:{seconds:02d}"
+    return f'{hours:02d}h {minutes:02d}min'
 
 
 def normalize_text(text):
@@ -457,7 +462,7 @@ def terminal_accent():
 def run_ui(screen, text, path, memory, args, position, changed, source=None, offsets=None, stats=None, page_starts=None, visual_index=None):
     source = text if source is None else source
     stats = stats if stats is not None else memory.timing(path, text, changed)
-    clock = ReadingClock(stats)
+    clock = ReadingClock(stats, focused=lambda: is_focused(screen))
     words_index = WordIndex(text)
     if path.suffix.lower() in ('.md', '.markdown', '.mdown'):
         daily_text, daily_offsets = markdown_preview(source)
@@ -479,11 +484,13 @@ def run_ui(screen, text, path, memory, args, position, changed, source=None, off
     except curses.error:
         pass
     accent = terminal_accent()
-    screen.timeout(100)
+    screen.timeout(1000)
     auto = args.auto or args.mode == "scroll"
     paused = False
     speed = args.wpm
     deadline = None
+    window_was_active = is_focused(screen)
+    focus_delay = None
     stack = []
     notice = "Fichier modifié : reprise au début." if changed else ""
     last_saved = None
@@ -533,9 +540,20 @@ def run_ui(screen, text, path, memory, args, position, changed, source=None, off
             save()
             height, width = screen.getmaxyx()
             screen.erase()
+            window_active = is_focused(screen)
+            if not window_active:
+                if window_was_active:
+                    clock.reset_passage()
+                    if deadline is not None:
+                        focus_delay = max(0, deadline - time.monotonic())
+                deadline = None
+            elif not window_was_active and focus_delay is not None:
+                deadline = time.monotonic() + focus_delay
+                focus_delay = None
+            window_was_active = window_active
             focus_large = focus.visible and height >= 14 and width >= 65
-            focus_label = 'FOCUS TERMINÉ' if focus.state == 'finished' else 'FOCUS · ' + ('CHRONO' if focus.mode == 'chrono' else 'MINUTEUR')
-            if focus.visible and focus.state == 'running' and (paused or help_open or position >= len(text)):
+            focus_label = 'FOCUS TERMINÉ' if focus.state == 'finished' else ('CHRONO' if focus.mode == 'chrono' else 'MINUTEUR') + ' · h:min'
+            if focus.visible and focus.state == 'running' and (paused or help_open or not window_active or position >= len(text)):
                 focus_label = ('CHRONO' if focus.mode == 'chrono' else 'MINUTEUR') + ' · pause'
             focus_lines = big_clock(focus.display) if focus_large else [focus.display]
             focus_width = max(map(len, [focus_label] + focus_lines)) if focus_large else len('Focus ' + focus.display)
@@ -585,8 +603,8 @@ def run_ui(screen, text, path, memory, args, position, changed, source=None, off
             done = position >= len(text)
             if done:
                 auto = False
-            clock.configure(not done and not paused and not help_open, not auto)
-            if auto and not paused and not help_open and deadline is None:
+            clock.configure(not done and not paused and not help_open and window_active, not auto)
+            if auto and not paused and not help_open and window_active and deadline is None:
                 words = max(1, words_index.count(position, step))
                 deadline = time.monotonic() + max(0.25, words * 60 / speed)
 
@@ -616,16 +634,20 @@ def run_ui(screen, text, path, memory, args, position, changed, source=None, off
             elif len(media_choices) > 1:
                 visual_message += f" · +{len(media_choices) - 1} page(s)"
 
-            cycles = memory.cycles(path, source)
+            cycles = memory.cycles(path, source, digest=daily_digest)
             completed = sum(row[1] for row in cycles)
             cycle_number = cycles[-1][0] if cycles else 1
             put(0, path.name, curses.A_BOLD, x=2)
             mode_label = {"lines": "Lignes", "words": "Mots", "scroll": "Défilement"}[args.mode]
             reading_state = "Lecture terminée" if done else "En pause · aide" if help_open else "En pause" if paused else "Lecture automatique" if auto else "Lecture manuelle"
+            if not window_active:
+                reading_state = 'Pause · fenêtre inactive'
             rhythm = f"{speed} mots/min" if auto else f"{rate:.0f} mots/min observés" if rate else "Rythme à calibrer"
             metadata = f"{mode_label} · {rhythm} · {reading_state}"
             if width < 65:
                 reading_state = "Fin" if done else "Pause" if help_open or paused else "Auto" if auto else "Manuel"
+                if not window_active:
+                    reading_state = 'Pause fenêtre'
                 rhythm = f"{rate:.0f} m/min" if rate else "calibrage"
                 metadata = f"{mode_label} · {rhythm} · {reading_state}"
             if done:
@@ -736,9 +758,19 @@ def run_ui(screen, text, path, memory, args, position, changed, source=None, off
                 else:
                     put(0, 'Focus ' + focus.display, accent | curses.A_BOLD, x=focus_left, chrome=False)
             screen.refresh()
+            wait_ms = 1000
+            if visual_pending and window_active:
+                wait_ms = 250
+            if deadline is not None and window_active:
+                wait_ms = min(wait_ms, max(1, math.ceil((deadline - time.monotonic()) * 1000)))
+            screen.timeout(wait_ms)
             key = screen.getch()
             clock.tick()
             advance = False
+            if key == FOCUS_EVENT:
+                continue
+            if not is_focused(screen) and key not in (ord('q'), 27):
+                continue
             if key in (ord("?"), ord("i")) or (help_open and key == 27):
                 reference_open = key == ord("i") and not help_open
                 help_open = not help_open
@@ -883,6 +915,19 @@ def focus_minutes(value):
     return minutes
 
 
+def run_with_focus(screen, *args):
+    enabled = enable_reports()
+    try:
+        try:
+            curses.set_escdelay(25)
+        except (AttributeError, curses.error):
+            pass
+        return run_ui(FocusScreen(screen, TerminalFocus()), *args)
+    finally:
+        if enabled:
+            disable_reports()
+
+
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("file", nargs="?", type=Path, help="fichier texte, Markdown ou PDF")
@@ -993,7 +1038,7 @@ def main(argv=None):
                 except OSError as error:
                     print(f'Repérage enrichi indisponible : {error}', file=sys.stderr)
         try:
-            curses.wrapper(run_ui, text, path, memory, args, 0 if args.restart else position, changed, source, offsets, stats, page_starts, visual_index)
+            curses.wrapper(run_with_focus, text, path, memory, args, 0 if args.restart else position, changed, source, offsets, stats, page_starts, visual_index)
         finally:
             termios.tcsetattr(sys.stdin.fileno(), termios.TCSADRAIN, terminal_settings)
         print(f"Position sauvegardée dans {args.state.expanduser()}")

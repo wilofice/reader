@@ -111,10 +111,9 @@ class FocusSession:
 
     @property
     def display(self):
-        seconds = math.ceil(max(0, self.limit - self.elapsed)) if self.mode == 'timer' else int(self.elapsed)
-        minutes, seconds = divmod(seconds, 60)
+        minutes = math.ceil(max(0, self.limit - self.elapsed) / 60) if self.mode == 'timer' else int(self.elapsed // 60)
         hours, minutes = divmod(minutes, 60)
-        return f'{hours}:{minutes:02d}:{seconds:02d}' if hours else f'{minutes:02d}:{seconds:02d}'
+        return f'{hours:02d}:{minutes:02d}'
 
 
 DIGITS = {

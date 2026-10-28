@@ -182,7 +182,7 @@ class ReadingTests(unittest.TestCase):
                 stats = memory.timing(path, text)
                 self.assertEqual(stats.seconds, 10)
                 self.assertAlmostEqual(stats.manual_wpm, 120)
-                self.assertIn("00:40 observé", frames[-1][20])
+                self.assertIn("00h 01min observé", frames[-1][20])
                 self.assertIn("120 mots/min observés", frames[-1][1])
             finally:
                 memory.close()
@@ -208,9 +208,9 @@ class ReadingTests(unittest.TestCase):
         stats.manual_words, stats.manual_seconds = 20, 10
         self.assertEqual(reader.remaining_estimate(words, position, stats, False, 999), (50, "observed_manual_speed", 120))
         self.assertEqual(reader.remaining_estimate(words, len(text), stats, False, 200), (0, "complete", None))
-        self.assertEqual(reader.duration(59.9), "00:59")
-        self.assertEqual(reader.duration(59.9, rounded_up=True), "01:00")
-        self.assertEqual(reader.duration(3605), "1:00:05")
+        self.assertEqual(reader.duration(59.9), "00h 00min")
+        self.assertEqual(reader.duration(59.9, rounded_up=True), "00h 01min")
+        self.assertEqual(reader.duration(3605), "01h 00min")
 
     def test_old_database_migration_preserves_positions_and_timing_persists(self):
         with tempfile.TemporaryDirectory() as folder:
