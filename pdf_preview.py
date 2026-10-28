@@ -101,11 +101,11 @@ class PageRaster:
         return target
 
 
-def inspect_quicklook(screen, image, number, total, on_time=None):
+def inspect_quicklook(screen, image, number, total, on_time=None, title=None):
     """Use macOS's native preview for this page image, keeping the reader alive."""
     screen.erase()
     height, width = screen.getmaxyx()
-    messages = [f"Quick Look · page PDF {number}/{total}", "",
+    messages = [title or f"Quick Look · page PDF {number}/{total}", "",
                 "Fermez la fenêtre Quick Look pour revenir au même passage.",
                 "Depuis ce terminal : v / Échap / q pour fermer l'aperçu."]
     for row, message in enumerate(messages[:height]):
@@ -145,6 +145,67 @@ def inspect_quicklook(screen, image, number, total, on_time=None):
             screen.touchwin()
             screen.refresh()
     return seconds
+
+
+def inspect_image(screen, path, requested="auto", on_time=None):
+    """Display a local image, without converting or changing the Markdown source."""
+    path = Path(path).resolve(strict=True)
+    if not path.is_file():
+        raise ValueError("L'image locale n'est pas un fichier.")
+    if path.suffix.lower() not in ('.png', '.jpg', '.jpeg', '.gif', '.webp', '.bmp', '.tif', '.tiff'):
+        raise ValueError("Format d'image non pris en charge : utilisez PNG, JPEG, GIF, WebP, BMP ou TIFF.")
+    output_format = graphics_format(requested)
+    if output_format == 'quicklook':
+        if sys.platform != 'darwin' or not shutil.which('qlmanage'):
+            raise ValueError('Le mode Quick Look nécessite macOS et qlmanage.')
+        return inspect_quicklook(screen, path, 1, 1, on_time, title='Quick Look · ' + path.name)
+    if not shutil.which('chafa'):
+        raise ValueError('Aperçu intégré : installez Chafa avec `brew install chafa`.')
+    dirty = True
+    seconds = 0.0
+    screen.timeout(100)
+
+    def clear():
+        if output_format == 'kitty':
+            sys.stdout.buffer.write(b'\x1b_Ga=d,d=A\x1b\\')
+            sys.stdout.buffer.flush()
+        screen.clear()
+
+    try:
+        while True:
+            height, width = screen.getmaxyx()
+            if dirty:
+                clear()
+                try:
+                    screen.addstr(0, 0, ('Image Markdown · ' + path.name)[:max(0, width - 1)], curses.A_BOLD)
+                    screen.addstr(height - 1, 0, 'v/Échap/q : retour au passage'[:max(0, width - 1)])
+                except curses.error:
+                    pass
+                screen.refresh()
+                if height >= 8 and width >= 35:
+                    payload = checked_run(['chafa', f'--format={output_format}', '--probe=off', '--animate=off',
+                                           '--relative=on', '--scale=max', f'--size={width - 2}x{height - 4}',
+                                           '--align=hcenter', f'--view-size={width - 2}x{height - 4}', str(path)])
+                    screen.move(2, 1)
+                    screen.refresh()
+                    sys.stdout.buffer.write(payload)
+                    sys.stdout.buffer.flush()
+                dirty = False
+            before = time.monotonic()
+            key = screen.getch()
+            elapsed = time.monotonic() - before
+            if height >= 8 and width >= 35 and 0 <= elapsed <= 3:
+                seconds += elapsed
+                if on_time:
+                    on_time(elapsed)
+            if key in (27, ord('v'), ord('q')):
+                return seconds
+            if key == curses.KEY_RESIZE:
+                dirty = True
+    finally:
+        clear()
+        screen.touchwin()
+        screen.refresh()
 
 
 def inspect_pdf(screen, path, number, total, requested="auto", cache_root=None, on_time=None):

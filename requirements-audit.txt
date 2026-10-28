@@ -1,0 +1,2 @@
+# Dépendance facultative du comparateur, jamais requise pour lire.
+opencv-python-headless==5.0.0.93

@@ -1,14 +1,38 @@
 # Reader : documents enrichis, relectures et lecture ZEN
 
 Compte rendu des demandes du 27 octobre 2026. **Première livraison : ZEN,
-cycles de lecture, références et aperçu visuel de page PDF** ; les autres fonctions restent
+cycles de lecture, références, aperçu visuel de page PDF et images Markdown locales** ; les autres fonctions restent
 des propositions à développer. L'aperçu affiche la page entière avec Poppler et
-Chafa (centré dans iTerm2), ou dans Quick Look sur macOS ; il ne détecte ni
-n'interprète les objets complexes. La sélection automatique est documentée
+Chafa (centré dans iTerm2), ou dans Quick Look sur macOS. Un premier repérage
+structurel signale les images intégrées, tracés probables et références textuelles,
+sans interpréter les objets complexes. La sélection automatique est documentée
 dans le README. Ce document complète le
 [rapport sur l'apprentissage](RAPPORT-LECTURE-APPRENTISSAGE.md).
 
 ## 1. Intentions retenues
+
+### Repérage local livré et piste OpenCV / YOLO
+
+Le repérage initial utilise les outils Poppler déjà installés : inventaire des
+images et analyse des tracés SVG, page par page, en arrière-plan et avec cache.
+L'interface distingue une image intégrée, des tracés probables et une référence
+textuelle. `v` ouvre la page signalée, sans prétendre localiser précisément une
+figure ni comprendre son contenu. Le README décrit les limites et la désactivation.
+
+OpenCV permet d'extraire des contours et des formes après préparation de
+l'image ([documentation](https://docs.opencv.org/4.13.0/d4/d73/tutorial_py_contours_begin.html)).
+Il pourrait aider à repérer des grilles ou des zones, mais ces contours ne
+suffisent pas à expliquer une figure. YOLO peut être entraîné sur un jeu de
+données personnalisé ([documentation](https://docs.ultralytics.com/modes/train/)) :
+un modèle adapté aux documents serait à évaluer pour distinguer tableaux,
+figures et formules.
+
+**Hypothèse à mesurer** : ces méthodes locales peuvent coûter nettement moins
+qu'une analyse systématique par grand modèle multimodal pour la seule détection.
+Il faut toutefois compter préparation des pages, installation, mémoire,
+entraînement éventuel et maintenance. Aucun gain chiffré n'est établi. Avant
+d'ajouter une dépendance, comparer précision, oublis et latence sur un même
+corpus ; réserver une éventuelle interprétation LLM aux objets demandés.
 
 Lire les documents dans leur intégralité depuis le terminal, y compris les
 images, graphiques, tableaux et formules. Disposer d'une lecture épurée ou
@@ -61,11 +85,11 @@ lieu de prétendre restituer fidèlement une figure en caractères approximatifs
 Les images doivent rester agrandissables dans le terminal, avec déplacement
 dans l'image et retour au passage exact.
 
-Le rendu actuel avec `curses` ne gère pas encore cette couche graphique. Il
-faudra coordonner l'effacement du texte, les placements d'images, le changement
-de taille, la fermeture de vues et le tampon alternatif. Le choix entre une
-extension du moteur actuel et un autre moteur TUI sera décidé après prototype,
-sans réécriture générale préalable imposée.
+Le rendu actuel coordonne `curses` et Chafa pour effacer l'aperçu, centrer les
+images et revenir au texte. Les pages PDF disposent du zoom et du déplacement ;
+les images Markdown locales sont ajustées à la fenêtre. Une éventuelle évolution
+du moteur TUI devra préserver ce retour au passage, sans réécriture générale
+préalable imposée.
 
 ## 4. Préparer le document une fois, le lire plusieurs fois
 

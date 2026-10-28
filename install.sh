@@ -28,7 +28,9 @@ python_ready() {
 }
 poppler_ready() {
     command -v pdftotext >/dev/null 2>&1 && command -v pdftoppm >/dev/null 2>&1 &&
-        pdftotext -v >/dev/null 2>&1 && pdftoppm -v >/dev/null 2>&1
+        command -v pdfimages >/dev/null 2>&1 && command -v pdftocairo >/dev/null 2>&1 &&
+        pdftotext -v >/dev/null 2>&1 && pdftoppm -v >/dev/null 2>&1 &&
+        pdfimages -v >/dev/null 2>&1 && pdftocairo -v >/dev/null 2>&1
 }
 chafa_ready() {
     command -v chafa >/dev/null 2>&1 && chafa --version >/dev/null 2>&1
@@ -42,7 +44,7 @@ report() {
         missing=1
     fi
     if poppler_ready; then printf '%s\n' 'OK  Poppler : extraction et rendu PDF';
-    else printf '%s\n' 'MANQUANT  Poppler (pdftotext et pdftoppm)'; missing=1; fi
+    else printf '%s\n' 'MANQUANT  Poppler (pdftotext, pdftoppm, pdfimages, pdftocairo)'; missing=1; fi
     if chafa_ready; then printf '%s\n' 'OK  Chafa : aperçu des images dans le terminal';
     else printf '%s\n' 'MANQUANT  Chafa'; missing=1; fi
     return "$missing"

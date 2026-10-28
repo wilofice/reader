@@ -27,6 +27,8 @@ class InstallerTests(unittest.TestCase):
         self.tool("python3", '[ -f "$SIM_STATE/python" ]')
         self.tool("pdftotext", '[ -f "$SIM_STATE/poppler" ]')
         self.tool("pdftoppm", '[ -f "$SIM_STATE/poppler" ]')
+        self.tool("pdfimages", '[ -f "$SIM_STATE/poppler" ]')
+        self.tool("pdftocairo", '[ -f "$SIM_STATE/poppler" ]')
         self.tool("chafa", '[ -f "$SIM_STATE/chafa" ]')
         self.tool("brew", '''if [ "$1" = --prefix ]; then
     echo "$SIM_PREFIX"
@@ -85,7 +87,7 @@ fi''')
         prefix = self.folder / "homebrew"
         tools = prefix / "bin"
         tools.mkdir(parents=True)
-        for name in ("python3", "pdftotext", "pdftoppm", "chafa"):
+        for name in ("python3", "pdftotext", "pdftoppm", "pdfimages", "pdftocairo", "chafa"):
             (self.bin / name).rename(tools / name)
         self.env["SIM_PREFIX"] = str(prefix)
         result = self.run_installer()

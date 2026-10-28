@@ -13,8 +13,8 @@ Depuis le dépôt cloné, installez les dépendances avec une seule commande :
 ./install.sh
 ```
 
-Le script vérifie Python **3.10+** avec `curses` et SQLite, Poppler (`pdftotext`
-et `pdftoppm`) et Chafa. Il installe les éléments manquants via Homebrew et
+Le script vérifie Python **3.10+** avec `curses` et SQLite, Poppler (`pdftotext`,
+`pdftoppm`, `pdfimages`, `pdftocairo`) et Chafa. Il installe les éléments manquants via Homebrew et
 ne lance aucune installation si tout fonctionne déjà. Si Homebrew est absent,
 il lance son [installateur officiel](https://docs.brew.sh/Installation), qui peut
 demander confirmation, les outils de développement Apple et un mot de passe
@@ -91,7 +91,8 @@ un lien vers cet exécutable dans un répertoire de votre `PATH`.
 
 La touche `z` active ou quitte le mode ZEN : seul le contenu reste visible,
 sans en-tête, citation, barre ni compteurs. La position et le temps continuent
-à être sauvegardés. Les commandes habituelles restent actives ; `?` affiche
+à être sauvegardés. Seul un discret indice de contenu visuel PDF peut rester
+au-dessus du texte. Les commandes habituelles restent actives ; `?` affiche
 temporairement l'aide et `i` la référence du passage, puis Échap revient à la
 lecture. L'aide et la consultation de référence suspendent le défilement et le
 comptage du temps. Quitter ZEN conserve la position, avec adaptation du passage
@@ -221,7 +222,7 @@ Toutes les anciennes formes restent acceptées. Par exemple,
 | `N` (majuscule) | Commencer une nouvelle lecture après avoir terminé |
 | `z` | Activer / quitter ZEN |
 | `i` | Consulter la référence de page PDF ou de ligne source |
-| `v` | Ouvrir la page PDF comme image dans le terminal |
+| `v` | Consulter les pages PDF signalées ou les images Markdown locales du passage |
 | `q`, Échap | Sauvegarder et quitter |
 
 Le retour retrouve les passages visités pendant la session. Après réouverture,
@@ -341,7 +342,8 @@ Les fichiers `.md`, `.markdown` et `.mdown` s'ouvrent automatiquement en aperçu
 textuel : titres sans `#`, texte sans délimiteurs de gras/italique, libellés des
 liens, listes avec puces et blocs de code conservés. Les références de notes,
 leurs définitions et le HTML décoratif ou explicitement masqué sont retirés.
-Les images ne sont pas affichées ; leur texte alternatif est conservé s'il existe.
+Les images gardent leur texte alternatif (ou le libellé « Image ») dans le texte ;
+`v` permet de consulter les images locales du passage.
 Les tableaux restent textuels. Ce rendu couvre le Markdown courant, sans
 reproduire toute la mise en page d'un navigateur ni les extensions complexes.
 
@@ -396,11 +398,46 @@ du passage affiché. La touche `i` fournit la référence et le chemin du docume
 sans perdre la position. Dans un Markdown ou un texte, elle indique la ligne
 du source, y compris en aperçu Markdown.
 
-**Ce prototype affiche la page originale entière, sans reconnaissance des objets.**
+**L'aperçu affiche la page originale entière, sans interprétation des objets.**
 La touche `v` rend sa mise en page avec Poppler, puis l'affiche dans le mode
 adapté : figures, tableaux et formules restent à leur emplacement.
-Si le passage couvre plusieurs pages, l'aperçu commence à la première ; vous
-pouvez consulter la suivante sans avancer votre position de lecture.
+Si plusieurs pages du passage ont déjà des indices visuels, `v` ouvre un menu :
+`↑/↓` (ou `j/k`) pour choisir, Entrée pour ouvrir, Échap pour annuler.
+Avec une seule page signalée, l'ouverture est directe ; sans indice disponible,
+l'aperçu commence à la première page du passage. Les résultats en cours d'analyse
+apparaîtront lors du retour à la lecture. Vous pouvez consulter la page suivante
+dans l'aperçu intégré sans avancer votre position de lecture.
+
+#### Indicateur de contenu visuel
+
+L'organisation prévue pour la suite est décrite dans [ARCHITECTURE.md](ARCHITECTURE.md).
+
+Sans appuyer sur `v`, un message en gras, au-dessus du texte, signale les indices trouvés sur les
+pages du passage affiché, par exemple : `Image repérée · p. PDF 20 · v voir`.
+Il reste visible en haut en ZEN, sans réafficher les compteurs. Sa ligne est
+réservée : l'apparition d'un indice ne décale pas le passage pendant la lecture.
+
+- **Image repérée** : image intégrée assez grande pour dépasser les filtres
+  de taille ; les petites icônes et masques sont ignorés.
+- **Tracés visuels probables** : plusieurs traits ou formes vectorielles,
+  pouvant appartenir à un schéma, un graphe ou un tableau.
+- **Référence Figure 3-2** : mention dans le texte de cette page ; ce n'est
+  pas la preuve que la figure y apparaît. `v` ouvre la page de la mention.
+
+L'analyse locale utilise `pdfimages` et un export SVG `pdftocairo`, en
+arrière-plan : pages affichées et une page d'avance, sans parcourir tout le
+livre. Elle ne nécessite ni modèle, ni GPU, ni appel payant. Les résultats sont
+mis en cache dans `~/.cache/reader/visuals-v1/<empreinte PDF>/` (ou sous
+`$XDG_CACHE_HOME/reader/visuals-v1/`). L'empreinte porte sur le fichier complet.
+La touche `i` donne les indices et les éventuelles erreurs. Une analyse
+indisponible est distinguée d'une analyse sans indice ; `v` reste utilisable.
+
+Ce repérage est **heuristique, à l'échelle de la page** : il ne localise pas
+l'objet dans le passage, ne distingue pas fiablement tableau, formule et figure,
+et peut signaler des décorations. Il peut manquer les petites images ou un
+tableau sans bordures. Les caractères définis comme glyphes SVG sont exclus du
+comptage des tracés. L'absence d'indicateur ne garantit pas l'absence d'objet.
+Pour désactiver l'analyse : `./reader "document.pdf" --no-visual-hints`.
 
 ```sh
 brew install poppler chafa
@@ -485,15 +522,41 @@ dépassant 30 secondes retourne une erreur et laisse la lecture en pause.
 Ce prototype prépare la page de manière synchrone : une touche de retour est
 traitée à la fin de la préparation. Aucun OCR ni LLM n'est appelé.
 
-La page indiquée localise le passage courant ; elle n'atteste pas qu'un objet
-complexe s'y trouve. Le numéro physique commence à 1 et peut différer du numéro
+La référence de page localise le passage courant ; l'indicateur visuel donne
+séparément les indices trouvés. Le numéro physique commence à 1 et peut différer du numéro
 imprimé dans le livre. Les pages sans texte entre deux pages restent comptées.
 Les PDF entièrement scannés nécessitent toujours un OCR préalable.
 
 `-p` expose `pdf_page` et `pdf_pages` pour un PDF, sinon `null`. Ces champs
 concernent le début du passage sauvegardé, indépendamment de la taille de fenêtre.
-Le rendu reste limité aux pages PDF : pas d'images Markdown ni de conversion
-sémantique des tableaux ou formules pour le moment.
+Les tableaux et formules ne font pas l'objet d'une conversion sémantique.
+
+### Images Markdown locales
+
+Les images référencées dans le passage affiché sont signalées au-dessus du texte.
+`v` ouvre directement une image unique ou propose un choix s'il y en a plusieurs.
+Le même mode `--preview auto` sélectionne iTerm2, Quick Look ou les symboles.
+Échap / `v` revient exactement au passage ; le défilement automatique attend la
+fermeture. Le choix n'ajoute pas de temps de lecture ; la consultation de l'image
+est comptée comme pour un aperçu PDF.
+
+```markdown
+![Architecture](images/architecture.png)
+![Tableau](<images/tableau des mesures.jpg>)
+![Schéma][schema]
+
+[schema]: images/schema.png
+```
+
+Les chemins relatifs sont résolus depuis le dossier du Markdown, pas depuis
+le terminal. Les images inline, les références Markdown et les balises HTML
+`<img src="…">` simples sont prises en charge ; les exemples dans les blocs de
+code sont ignorés. Les images distantes ne sont pas téléchargées.
+Formats : PNG, JPEG, GIF, WebP, BMP et TIFF (selon le moteur installé). Les GIF
+sont affichés sans animation dans l'aperçu intégré. Les SVG et les extensions
+Markdown complexes restent hors de cette première version. Un fichier manquant
+produit un message et laisse revenir à la lecture. L'aperçu intégré ajuste
+l'image au terminal ; le zoom et le déplacement restent propres à l'aperçu PDF.
 
 ### Stockage et reprise
 
@@ -538,12 +601,48 @@ aussi un vrai PDF si Poppler est disponible ; sinon ce test est ignoré.
 
 ## Recherche et évolutions proposées
 
+### Comparer automatiquement les détecteurs sur un PDF
+
+Un outil **expérimental, séparé de la lecture** compare le repérage structurel
+Poppler et une méthode OpenCV sur toutes les pages, sans toucher à SQLite.
+OpenCV masque les mots sélectionnables puis cherche des zones d'encre restantes.
+Il ne comprend pas les figures et peut manquer des formules masquées avec le
+texte. Les lignes sont aussi mesurées par morphologie
+([méthode OpenCV](https://docs.opencv.org/4.13.0/dd/dd7/tutorial_morph_lines_detection.html)).
+
+```sh
+python3 -m venv .venv-audit
+.venv-audit/bin/python -m pip install -r requirements-audit.txt
+.venv-audit/bin/python audit_visuals.py "document.pdf" --sample 16
+```
+
+Poppler reste nécessaire. Aucune dépendance du lecteur n'est ajoutée par défaut.
+Les résultats se trouvent dans `output/pdf/visual-audit/<empreinte PDF>/` :
+`summary.md`, inventaires JSON/CSV et `review.html`. La galerie locale mélange
+des désaccords et des accords positifs/négatifs ; elle permet d'exporter des
+annotations Oui/Non/Incertain. Ces choix ne sont pas enregistrés automatiquement :
+exportez-les avant de fermer la page. Les pages sont numérotées physiquement.
+
+Les analyses réussies sont conservées pour reprendre après interruption ; les
+erreurs sont retentées. `--output chemin` change le dossier de résultats.
+Les temps sauvegardés peuvent provenir d'une passe antérieure. Aucun fichier
+n'est envoyé sur le réseau. Les rendus personnels et l'environnement d'audit
+sont exclus de Git.
+
+Un désaccord **ne prouve pas un oubli**. Seul un contrôle visuel peut établir
+une référence ; sans annotations indépendantes, cet outil ne calcule ni précision
+ni rappel globaux. Ses résultats ne changent pas le détecteur de `reader`.
+Le [premier compte rendu Poppler / OpenCV](RAPPORT-DETECTION-VISUELLE.md)
+présente l'essai sur 269 pages et le contrôle visuel d'un échantillon.
+L'[audit du livre de Russell et Norvig](RAPPORT-AUDIT-AIMA.md) couvre 1 166 pages
+et documente notamment les formules manquées et la correction de l'import XML.
+
 La [feuille de route des documents enrichis](FEUILLE-DE-ROUTE.md) organise les
 demandes de mode ZEN, relectures complètes, images, graphes, tableaux, formules,
 pas de progression, colonne LLM et voix de lecture. Elle précise les priorités,
 les dépendances et les limites des solutions envisagées. Le mode ZEN, les cycles
-et un aperçu visuel des pages PDF sont désormais disponibles ; les images
-Markdown et les autres enrichissements restent à développer.
+et un aperçu visuel des pages PDF et des images Markdown locales sont désormais
+disponibles ; les autres enrichissements restent à développer.
 
 Le [rapport sur la lecture assidue et l'apprentissage durable](RAPPORT-LECTURE-APPRENTISSAGE.md)
 réunit les recherches consultées, leurs limites et les fonctions envisagées :

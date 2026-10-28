@@ -20,7 +20,9 @@ import sys
 import termios
 import time
 import unicodedata
-from pdf_preview import inspect_pdf
+from pdf_preview import inspect_pdf, inspect_image
+from reading_media import markdown_images, choose_media
+from visual_hints import PdfVisualIndex, label as visual_label
 
 
 # Devise de Reader choisie par l'utilisateur, sans attribution à un auteur.
@@ -263,8 +265,8 @@ class PreviewHTML(HTMLParser):
                   or "hidden" in attrs or "display:none" in (attrs.get("style") or "").replace(" ", "").lower())
         if not hidden and tag == "br":
             self.output.append("\n")
-        if not hidden and tag == "img" and attrs.get("alt"):
-            self.output.append(attrs["alt"])
+        if not hidden and tag == "img":
+            self.output.append(attrs.get("alt") or "Image")
         if tag not in ("img", "br", "hr", "meta", "link", "input", "wbr", "source"):
             self.stack.append((tag, hidden))
 
@@ -312,9 +314,10 @@ def markdown_preview(source):
 
         line = re.sub(r"\\([\\`*_{}\[\]()#+.!>|~-])", protect_escape, line)
         line = re.sub(r"\[\^[^\]]+\]", "", line)
-        line = re.sub(r"!?\[([^\]]*)\]\((?:[^()\n]|\([^()\n]*\))*\)", r"\1", line)
-        line = re.sub(r"!?\[([^\]]+)\]\[([^\]]*)\]", lambda m: m[1] if (m[2] or m[1]) in references else m[0], line)
-        line = re.sub(r"\[([^\]]+)\]", lambda m: m[1] if m[1] in references else m[0], line)
+        line = re.sub(r"!?\[([^\]]*)\]\((?:[^()\n]|\([^()\n]*\))*\)",
+                      lambda m: m[1] or ("Image" if m[0].startswith("!") else ""), line)
+        line = re.sub(r"!?\[([^\]]*)\]\[([^\]]*)\]", lambda m: (m[1] or "Image") if (m[2] or m[1]) in references else m[0], line)
+        line = re.sub(r"!?\[([^\]]+)\]", lambda m: m[1] if m[1] in references else m[0], line)
         line = re.sub(r"<((?:https?://|mailto:)[^>]+)>", r"\1", line)
         line = html.convert(line)
         for delimiter in (r"\*\*", "__", "~~", r"\*", "_"):
@@ -446,11 +449,12 @@ def terminal_accent():
     return curses.A_BOLD
 
 
-def run_ui(screen, text, path, memory, args, position, changed, source=None, offsets=None, stats=None, page_starts=None):
+def run_ui(screen, text, path, memory, args, position, changed, source=None, offsets=None, stats=None, page_starts=None, visual_index=None):
     source = text if source is None else source
     stats = stats if stats is not None else memory.timing(path, text, changed)
     clock = ReadingClock(stats)
     words_index = WordIndex(text)
+    images = markdown_images(source, path) if path.suffix.lower() in ('.md', '.markdown', '.mdown') else []
 
     def source_position():
         return offsets[position] if offsets is not None else position
@@ -486,7 +490,7 @@ def run_ui(screen, text, path, memory, args, position, changed, source=None, off
         "g                 Revenir au début",
         "z                 Activer / quitter ZEN",
         "i                 Référence de page ou ligne source",
-        "v                 Aperçu visuel de la page PDF",
+        "v                 Pages PDF / images Markdown du passage",
         "N                 Nouvelle lecture après la fin",
         "q                 Sauvegarder et quitter", "",
         "[ et ] règlent aussi la taille du passage.",
@@ -556,11 +560,26 @@ def run_ui(screen, text, path, memory, args, position, changed, source=None, off
                 None if deadline is None else deadline - time.monotonic(),
             )
             page_label = ""
+            visual_hint, visual_pending, visual_pages = None, False, []
             if page_starts:
                 first_page = min(len(page_starts), bisect_right(page_starts, source_position()))
                 source_end = offsets[end] if offsets is not None else end
                 last_page = min(len(page_starts), bisect_right(page_starts, max(source_position(), source_end - 1)))
                 page_label = str(first_page) if first_page == last_page else f"{first_page}–{last_page}"
+                if visual_index is not None:
+                    visual_hint, visual_pending, visual_pages = visual_index.visible(first_page, last_page)
+            visual_message = (f"{visual_label(visual_hint)} · p. PDF {visual_hint['page']} · v voir"
+                              if visual_hint else "")
+            source_end = offsets[end] if offsets is not None else end
+            passage_images = [item for item in images
+                              if item['start'] < source_end and item['end'] > source_position()]
+            media_choices = [dict(page=item['page'], title=f"Page PDF {item['page']} · {visual_label(item)}")
+                             for item in visual_pages if visual_label(item)]
+            if passage_images:
+                visual_message = f"{len(passage_images)} image(s) Markdown · v voir"
+                media_choices = passage_images
+            elif len(media_choices) > 1:
+                visual_message += f" · +{len(media_choices) - 1} page(s)"
 
             cycles = memory.cycles(path, source)
             completed = sum(row[1] for row in cycles)
@@ -598,9 +617,21 @@ def run_ui(screen, text, path, memory, args, position, changed, source=None, off
                 if page_starts:
                     info += [f"Page(s) PDF : {page_label} / {len(page_starts)} (index physique)",
                              "Le numéro imprimé sur la page peut être différent.",
-                             "Prototype : référence de page, sans détection des objets."]
+                             "Repérage structurel : images et tracés ; pas d'interprétation."]
+                    if visual_message:
+                        info += [visual_message]
+                    if visual_pending:
+                        info += ["Analyse visuelle en cours pour certaines pages."]
+                    for item in visual_pages:
+                        info += [f"Page {item['page']} : {item['images']} image(s), {item['paths']} indice(s) de tracés."]
+                        if item.get("error"):
+                            info += ["Analyse indisponible ou incomplète : " + item["error"]]
+                    info += ["Une référence textuelle peut renvoyer à une autre page.",
+                             "L'absence d'indicateur ne garantit pas l'absence de figure."]
                 else:
                     info += [f"Ligne source : {source.count(chr(10), 0, source_position()) + 1}"]
+                    for item in passage_images:
+                        info += ["Image : " + item['title'], str(item['path'])]
                 info += ["", f"Lecture {cycle_number} · {completed} terminée(s)",
                          f"Relectures terminées : {max(0, completed - 1)}",
                          "", "i / ? / Échap : revenir au passage"]
@@ -617,7 +648,18 @@ def run_ui(screen, text, path, memory, args, position, changed, source=None, off
                     if body_height > 1:
                         put(body_start + 1, "g / b : revoir dans ce cycle", x=body_left, chrome=False)
             if page_starts and not help_open:
-                put(height - 2, notice or f"Page(s) PDF {page_label}/{len(page_starts)} · v : image · i : référence", curses.A_DIM)
+                unavailable = any(item.get("error") for item in visual_pages)
+                page_status = f"Page(s) PDF {page_label}/{len(page_starts)} · v image · i référence"
+                if visual_pending:
+                    page_status += " · analyse…"
+                elif unavailable:
+                    page_status += " · analyse incomplète"
+                put(height - 2, notice or page_status, curses.A_DIM)
+            if visual_message and not help_open:
+                # Keep the cue in the reading column, without moving the passage.
+                hint_row = 0 if zen else body_start - 1
+                hint_left = min(body_left, max(2, width - 2 - sum(map(cell_width, visual_message))))
+                put(hint_row, visual_message, accent | curses.A_BOLD, x=hint_left, chrome=False)
             fraction = source_position() / len(source)
             bar_width = width - 10
             filled, remainder = divmod(int(bar_width * 8 * fraction), 8)
@@ -653,8 +695,8 @@ def run_ui(screen, text, path, memory, args, position, changed, source=None, off
                 deadline = None
                 continue
             if key == ord("v") and not help_open:
-                if not page_starts:
-                    notice = "L'aperçu visuel est disponible pour les PDF."
+                if not page_starts and not passage_images:
+                    notice = "Aucune image locale dans ce passage ; aperçu disponible pour les PDF."
                     continue
                 clock.configure(False, not auto)
                 save(force=True)
@@ -663,8 +705,14 @@ def run_ui(screen, text, path, memory, args, position, changed, source=None, off
                     save()
 
                 try:
-                    inspect_pdf(screen, path, first_page, len(page_starts),
-                                getattr(args, "graphics", "auto"), on_time=record_inspection)
+                    choice = choose_media(screen, media_choices) if media_choices else dict(page=first_page)
+                    if choice is not None:
+                        if 'path' in choice:
+                            inspect_image(screen, choice['path'], getattr(args, 'graphics', 'auto'),
+                                          on_time=record_inspection)
+                        else:
+                            inspect_pdf(screen, path, choice['page'], len(page_starts),
+                                        getattr(args, "graphics", "auto"), on_time=record_inspection)
                     notice = "Retour au passage sauvegardé."
                 except (OSError, ValueError) as error:
                     notice = str(error)
@@ -762,6 +810,7 @@ def main(argv=None):
     parser.add_argument("--preview", "--graphics", dest="graphics", choices=("auto", "iterm2", "quicklook", "kitty", "iterm", "sixels", "symbols"), default="auto", help="aperçu PDF : automatique, iTerm2 ou Quick Look (touche v)")
     parser.add_argument("--new-reading", action="store_true", help="commencer un nouveau cycle après avoir terminé le précédent")
     parser.add_argument("--readings", action="store_true", help="afficher les cycles de lecture du document")
+    parser.add_argument("--no-visual-hints", action="store_true", help="désactiver le repérage local des images et tracés PDF")
     parser.add_argument("-e", "--encoding", default="utf-8-sig", help="encodage du texte (défaut : UTF-8)")
     parser.add_argument("-R", "--raw", action="store_true", help="afficher le code source des fichiers Markdown au lieu de l'aperçu")
     parser.add_argument("-S", "--state", type=Path, default=state_path(), help="chemin de la base SQLite")
@@ -775,6 +824,7 @@ def main(argv=None):
     if not args.file and not args.history:
         parser.error("indiquez un fichier ou --history")
     memory = None
+    visual_index = None
     try:
         memory = Memory(args.state)
         if args.history:
@@ -825,8 +875,10 @@ def main(argv=None):
             raise ValueError("La lecture interactive nécessite un terminal. Utilisez --status pour consulter la progression.")
         locale.setlocale(locale.LC_ALL, "")
         terminal_settings = termios.tcgetattr(sys.stdin.fileno())
+        if page_starts and not args.no_visual_hints:
+            visual_index = PdfVisualIndex(path, source, page_starts)
         try:
-            curses.wrapper(run_ui, text, path, memory, args, 0 if args.restart else position, changed, source, offsets, stats, page_starts)
+            curses.wrapper(run_ui, text, path, memory, args, 0 if args.restart else position, changed, source, offsets, stats, page_starts, visual_index)
         finally:
             termios.tcsetattr(sys.stdin.fileno(), termios.TCSADRAIN, terminal_settings)
         print(f"Position sauvegardée dans {args.state.expanduser()}")
@@ -838,6 +890,8 @@ def main(argv=None):
         print(f"reader : {error}", file=sys.stderr)
         return 1
     finally:
+        if visual_index:
+            visual_index.close()
         if memory:
             memory.close()
 

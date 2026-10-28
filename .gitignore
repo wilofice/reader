@@ -2,6 +2,9 @@
 __pycache__/
 *.py[cod]
 .DS_Store
+.venv-audit/
+output/pdf/
+tmp/pdfs/
 
 # La mémoire de lecture est personnelle et ne doit pas être versionnée.
 *.sqlite3
