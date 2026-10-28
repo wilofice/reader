@@ -89,14 +89,67 @@ un lien vers cet exécutable dans un répertoire de votre `PATH`.
 ./reader "notes.md" -z -m w -s 80 -a -w 240
 ```
 
-La touche `z` active ou quitte le mode ZEN : seul le contenu reste visible,
-sans en-tête, citation, barre ni compteurs. La position et le temps continuent
-à être sauvegardés. Seul un discret indice de contenu visuel PDF peut rester
-au-dessus du texte. Les commandes habituelles restent actives ; `?` affiche
+La touche `z` active ou quitte le mode ZEN : le contenu reste visible,
+sans en-tête, citation ni barre de progression. La position et le temps continuent
+à être sauvegardés. Le compteur quotidien reste discret en bas à droite ; un
+focus activé explicitement et un indice visuel peuvent apparaître au-dessus
+du texte. Les commandes habituelles restent actives ; `?` affiche
 temporairement l'aide et `i` la référence du passage, puis Échap revient à la
 lecture. L'aide et la consultation de référence suspendent le défilement et le
 comptage du temps. Quitter ZEN conserve la position, avec adaptation du passage
 à la nouvelle surface d'affichage.
+
+### Focus : chrono ou minuteur
+
+Le focus est **désactivé à l'ouverture**. Appuyez sur `f`, puis choisissez
+`c` pour un chrono (temps écoulé) ou `m` pour un minuteur (temps restant).
+Entrée démarre ; Échap annule. Dans ce menu, `j` / `k` règlent le minuteur
+par pas de 5 minutes : **minimum 5 minutes**, 25 minutes par défaut.
+
+Le temps apparaît en grands chiffres en haut à droite. Sur un terminal petit,
+il passe en affichage compact. `f` arrête le focus ; `p` suspend ou reprend la
+lecture et le focus. L'aide, les menus et la veille ne sont pas comptés ; le
+temps de consultation des figures l'est. À zéro, le minuteur reste visible avec
+« FOCUS TERMINÉ » et une sonnerie terminal unique, si elle est prise en charge.
+La lecture peut continuer ; `f` ferme le minuteur terminé.
+
+Le focus conserve le rythme de lecture choisi, manuel ou automatique. Le mode
+et la durée sont mémorisés, mais **aucune séance ne redémarre automatiquement**.
+Pour présélectionner une durée sans démarrer :
+
+```sh
+./reader "document.pdf" --focus-minutes 15
+```
+
+### Objectif quotidien de mots
+
+Le coin inférieur droit affiche `xxx/15000 mots`, tous documents confondus.
+Le compteur augmente **quand un passage est validé** en avançant, en manuel
+comme en automatique. Afficher un passage, ouvrir l'aide ou revenir en arrière
+n'ajoute aucun mot. Repasser sur une zone déjà validée dans le même cycle et
+le même jour ne la recompte pas. Une nouvelle relecture avec `N`, après avoir
+terminé le document, contribue de nouveau à l'objectif.
+
+Le suivi utilise le texte lisible (sans compter la ponctuation seule), avec
+les mêmes repères pour le Markdown brut et son aperçu. Il estime les mots
+parcourus ; il ne mesure pas les mouvements des yeux. Les anciens temps de
+lecture ne sont pas convertis rétroactivement en mots.
+
+Le jour suit la date locale de la machine. À minuit, le compteur affiché passe
+au nouveau jour ; les totaux antérieurs restent dans SQLite. Un passage est
+attribué au jour de sa validation. L'objectif est réglable et mémorisé :
+
+```sh
+./reader --daily                     # consulter le total du jour
+./reader --goal 15000 --daily        # changer l'objectif sans ouvrir de document
+./reader "notes.md" --goal 12000     # régler l'objectif puis lire
+```
+
+`--status` expose également `daily_date`, `daily_words` et `daily_goal`.
+**15 000 mots correspondent à environ 30 à 60 pages** en supposant 250 à 500 mots
+par page, ou 75 minutes à 200 mots/minute, hors pauses et prise de notes.
+C'est un objectif quotidien conséquent ; un ouvrage technique peut demander
+nettement plus de temps à volume égal.
 
 ### Choisir le passage et le rythme
 
@@ -214,6 +267,7 @@ Toutes les anciennes formes restent acceptées. Par exemple,
 | `b`, flèche gauche/haut | Revenir et suspendre l'avance automatique |
 | Espace | Pause / reprise en automatique ; avancer en manuel, ou reprendre si en pause |
 | `p` | Mettre en pause / reprendre dans tous les modes, y compris le comptage du temps |
+| `f` | Choisir un chrono ou un minuteur ; arrêter le focus s'il est déjà affiché |
 | `a` | Activer ou suspendre l'automatique |
 | `+`, `-` | Modifier la vitesse de 25 mots/minute |
 | `j`, `k` | Réduire / augmenter le nombre de lignes ou de mots affichés |

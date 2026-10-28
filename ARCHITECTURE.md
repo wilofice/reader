@@ -18,6 +18,11 @@ avec Quick Look comme solution macOS complémentaire.
   indépendant de `curses`, avec priorité aux pages affichées.
 - `layout_worker.py` : typographie PyMuPDF et modèle local DocLayout-YOLO dans
   `.venv-layout` ; cache versionné défini par `formula_cache.py`.
+- `reading_habits.py` : séance de focus liée au temps de lecture actif et
+  couverture des mots par jour/document/cycle dans SQLite ; les intervalles
+  validés évitent le double comptage après un retour ou une réouverture.
+- `focus_ui.py` : choix explicite du chrono ou du minuteur, sans activation
+  automatique ni changement du rythme de lecture.
 
 Le repérage est indépendant de la taille des passages. L'interface associe les
 pages couvertes par le texte affiché à leurs indices. Une mention textuelle

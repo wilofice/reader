@@ -24,6 +24,8 @@ from pdf_preview import inspect_pdf, inspect_image
 from reading_media import markdown_images, choose_media
 from visual_hints import PdfVisualIndex, label as visual_label
 from formula_index import FormulaIndex, EnrichedIndex, available as formulas_available, prepare_document
+from reading_habits import DailyReading, DailyWordIndex, FocusSession, big_clock
+from focus_ui import choose_focus
 
 
 # Devise de Reader choisie par l'utilisateur, sans attribution à un auteur.
@@ -60,6 +62,8 @@ class Memory:
             base_seconds REAL NOT NULL DEFAULT 0,
             PRIMARY KEY (path, digest, number))""")
         self.db.commit()
+
+        self.daily = DailyReading(self.db)
 
     def cycles(self, path, text):
         digest = hashlib.sha256(text.encode("utf-8")).hexdigest()
@@ -455,6 +459,16 @@ def run_ui(screen, text, path, memory, args, position, changed, source=None, off
     stats = stats if stats is not None else memory.timing(path, text, changed)
     clock = ReadingClock(stats)
     words_index = WordIndex(text)
+    if path.suffix.lower() in ('.md', '.markdown', '.mdown'):
+        daily_text, daily_offsets = markdown_preview(source)
+    else:
+        daily_text, daily_offsets = source, None
+    daily_index = DailyWordIndex(daily_text, daily_offsets)
+    daily_digest = hashlib.sha256(source.encode('utf-8')).hexdigest()
+    focus = FocusSession()
+    daily_refresh = 0.0
+    daily_day = memory.daily.day
+    daily_words, daily_goal = memory.daily.words(), memory.daily.goal
     images = markdown_images(source, path) if path.suffix.lower() in ('.md', '.markdown', '.mdown') else []
 
     def source_position():
@@ -492,6 +506,7 @@ def run_ui(screen, text, path, memory, args, position, changed, source=None, off
         "z                 Activer / quitter ZEN",
         "i                 Référence de page ou ligne source",
         "v                 Pages PDF / images Markdown du passage",
+        "f                 Démarrer / arrêter le focus (chrono ou minuteur)",
         "N                 Nouvelle lecture après la fin",
         "q                 Sauvegarder et quitter", "",
         "[ et ] règlent aussi la taille du passage.",
@@ -500,8 +515,14 @@ def run_ui(screen, text, path, memory, args, position, changed, source=None, off
     ]
 
     def save(force=False):
-        nonlocal last_saved, last_save_time
+        nonlocal last_saved, last_save_time, notice
         clock.tick()
+        if focus.update(stats.seconds):
+            notice = 'Focus terminé · f : fermer le minuteur.'
+            try:
+                curses.beep()
+            except curses.error:
+                pass
         now = time.monotonic()
         if force or last_saved is None or position != last_saved or now - last_save_time >= 5:
             memory.save(path, source, source_position(), stats)
@@ -512,13 +533,23 @@ def run_ui(screen, text, path, memory, args, position, changed, source=None, off
             save()
             height, width = screen.getmaxyx()
             screen.erase()
+            focus_large = focus.visible and height >= 14 and width >= 65
+            focus_label = 'FOCUS TERMINÉ' if focus.state == 'finished' else 'FOCUS · ' + ('CHRONO' if focus.mode == 'chrono' else 'MINUTEUR')
+            if focus.visible and focus.state == 'running' and (paused or help_open or position >= len(text)):
+                focus_label = ('CHRONO' if focus.mode == 'chrono' else 'MINUTEUR') + ' · pause'
+            focus_lines = big_clock(focus.display) if focus_large else [focus.display]
+            focus_width = max(map(len, [focus_label] + focus_lines)) if focus_large else len('Focus ' + focus.display)
+            focus_left = max(0, width - focus_width - 2)
 
             def put(y, value, style=0, x=0, chrome=True):
                 if zen and not help_open and chrome:
                     return
                 if 0 <= y < height:
                     try:
-                        screen.addstr(y, x, clipped(value, max(0, width - x - 1)), style)
+                        available = width - x - 1
+                        if focus.visible and y < (4 if focus_large else 1) and x < focus_left:
+                            available = min(available, focus_left - x - 2)
+                        screen.addstr(y, x, clipped(value, max(0, available)), style)
                     except curses.error:
                         pass
 
@@ -538,6 +569,9 @@ def run_ui(screen, text, path, memory, args, position, changed, source=None, off
             body_height = height - body_start - 4
             if zen and not help_open:
                 body_start, body_height = 2, height - 4
+            if focus_large:
+                body_start = 6 if zen and not help_open else 7
+                body_height = height - body_start - (2 if zen and not help_open else 4)
             body_width = min(76, width - 6)
             body_left = (width - body_width) // 2
             layout = (body_height, body_width)
@@ -604,7 +638,7 @@ def run_ui(screen, text, path, memory, args, position, changed, source=None, off
                 hint = "    j réduire · k augmenter"
                 quote_width = sum(map(cell_width, READING_QUOTE))
                 quote_x = width - 2 - quote_width
-                quote_fits = quote_x >= 2 + sum(map(cell_width, setting)) + 3
+                quote_fits = not focus.visible and quote_x >= 2 + sum(map(cell_width, setting)) + 3
                 if width >= 65 and (not quote_fits or quote_x >= 2 + sum(map(cell_width, setting + hint)) + 3):
                     setting += hint
                 put(2, setting, x=2)
@@ -662,7 +696,7 @@ def run_ui(screen, text, path, memory, args, position, changed, source=None, off
                 put(height - 2, notice or page_status, curses.A_DIM)
             if visual_message and not help_open:
                 # Keep the cue in the reading column, without moving the passage.
-                hint_row = 0 if zen else body_start - 1
+                hint_row = (body_start - 1 if focus.visible else 0) if zen else body_start - 1
                 hint_left = min(body_left, max(2, width - 2 - sum(map(cell_width, visual_message))))
                 put(hint_row, visual_message, accent | curses.A_BOLD, x=hint_left, chrome=False)
             fraction = source_position() / len(source)
@@ -679,11 +713,28 @@ def run_ui(screen, text, path, memory, args, position, changed, source=None, off
             put(height - 4, timing, curses.A_DIM)
             if help_open:
                 put(height - 2, "↑/↓ : défiler · ?/Échap : retour")
-                put(height - 1, "Lecture suspendue pendant l'aide", curses.A_DIM)
+                footer = "Lecture suspendue pendant l'aide"
             else:
                 if not page_starts:
                     put(height - 2, notice or "n suite · b retour · espace suite/pause", curses.A_DIM)
-                put(height - 1, "p pause · z ZEN · i référence · ? aide · q quitter" if width >= 55 else "z ZEN · ? aide · q quitter")
+                footer = ('f focus · p pause · z ZEN · i référence · ? aide · q quitter' if width >= 80
+                          else 'f focus · ? aide · q quitter' if width >= 60 else 'f focus · q quitter')
+            now = time.monotonic()
+            if now - daily_refresh >= 1 or daily_day != memory.daily.day:
+                daily_day = memory.daily.day
+                daily_words, daily_goal = memory.daily.words(), memory.daily.goal
+                daily_refresh = now
+            counter = f'{daily_words}/{daily_goal} mots'
+            daily_left = max(0, width - len(counter) - 2)
+            put(height - 1, clipped(footer, max(0, daily_left - 2)), curses.A_DIM)
+            put(height - 1, counter, accent if daily_words >= daily_goal else curses.A_DIM, x=daily_left, chrome=False)
+            if focus.visible:
+                if focus_large:
+                    put(0, focus_label, accent, x=focus_left, chrome=False)
+                    for row, line in enumerate(focus_lines, 1):
+                        put(row, line, accent | curses.A_BOLD, x=focus_left, chrome=False)
+                else:
+                    put(0, 'Focus ' + focus.display, accent | curses.A_BOLD, x=focus_left, chrome=False)
             screen.refresh()
             key = screen.getch()
             clock.tick()
@@ -740,6 +791,24 @@ def run_ui(screen, text, path, memory, args, position, changed, source=None, off
                 zen = not zen
                 deadline = None
                 continue
+            if key == ord('f'):
+                if focus.visible:
+                    focus.stop()
+                    notice = 'Focus arrêté.'
+                else:
+                    clock.configure(False, not auto)
+                    save(force=True)
+                    selection = choose_focus(screen, memory.daily.get('focus_mode', 'timer'),
+                                             int(memory.daily.get('focus_minutes', '25')))
+                    if selection is not None:
+                        mode, minutes = selection
+                        memory.daily.set('focus_mode', mode)
+                        memory.daily.set('focus_minutes', minutes)
+                        focus.start(mode, minutes, stats.seconds)
+                        notice = 'Focus actif · f arrêter · p pause.'
+                deadline = None
+                clock.reset_passage()
+                continue
             if key == ord("N"):
                 if done:
                     save(force=True)
@@ -787,6 +856,10 @@ def run_ui(screen, text, path, memory, args, position, changed, source=None, off
                 advance = True
             if advance and not done:
                 clock.complete_passage(words_index.count(position, step))
+                source_step = offsets[step] if offsets is not None else step
+                word_start, word_end = daily_index.interval(source_position(), source_step)
+                memory.daily.record(path, daily_digest, cycle_number, word_start, word_end)
+                daily_refresh = 0.0
                 stack.append(position)
                 position = step
                 paused = False
@@ -801,6 +874,13 @@ def positive(value):
     if number <= 0:
         raise argparse.ArgumentTypeError("La valeur doit être strictement positive.")
     return number
+
+
+def focus_minutes(value):
+    minutes = positive(value)
+    if minutes < 5:
+        raise argparse.ArgumentTypeError('La durée minimum est de 5 minutes.')
+    return minutes
 
 
 def main(argv=None):
@@ -818,6 +898,9 @@ def main(argv=None):
     parser.add_argument("--no-visual-hints", action="store_true", help="désactiver le repérage local des images et tracés PDF")
     parser.add_argument('--formulas', choices=('auto', 'off', 'text', 'model', 'hybrid'), default='auto', help='repérage des formules PDF (auto si installé)')
     parser.add_argument('--prepare', action='store_true', help='préparer le cache enrichi du PDF, sans ouvrir la mémoire de lecture')
+    parser.add_argument('--goal', type=positive, help='objectif quotidien de mots (15000 par défaut, mémorisé)')
+    parser.add_argument('--daily', action='store_true', help='afficher les mots validés aujourd’hui et l’objectif')
+    parser.add_argument('--focus-minutes', type=focus_minutes, help='durée du prochain minuteur, au moins 5 minutes ; ne démarre pas le focus')
     parser.add_argument("-e", "--encoding", default="utf-8-sig", help="encodage du texte (défaut : UTF-8)")
     parser.add_argument("-R", "--raw", action="store_true", help="afficher le code source des fichiers Markdown au lieu de l'aperçu")
     parser.add_argument("-S", "--state", type=Path, default=state_path(), help="chemin de la base SQLite")
@@ -826,11 +909,14 @@ def main(argv=None):
     args = parser.parse_args(argv)
     args.mode = {"l": "lines", "w": "words", "s": "scroll"}.get(args.mode, args.mode)
     args.size = args.size or (120 if args.mode == "words" else 15)
-    if args.new_reading and (args.restart or args.status or args.history or args.readings):
+    if args.new_reading and (args.restart or args.status or args.history or args.readings or args.daily):
         parser.error("--new-reading s'utilise seul avec les options de lecture")
-    if not args.file and not args.history:
-        parser.error("indiquez un fichier ou --history")
-    if args.prepare and (not args.file or args.history or args.status or args.readings or args.new_reading):
+    if not args.file and not args.history and not args.daily and args.goal is None:
+        parser.error("indiquez un fichier, --daily ou --history")
+    if args.daily and (args.status or args.history or args.readings):
+        parser.error('--daily s’utilise sans autre option de consultation')
+    if args.prepare and (not args.file or args.history or args.status or args.readings or args.new_reading
+                         or args.daily or args.goal is not None or args.focus_minutes is not None):
         parser.error('--prepare nécessite un PDF et s’utilise sans option de mémoire')
     memory = None
     visual_index = None
@@ -838,6 +924,13 @@ def main(argv=None):
         if args.prepare:
             return prepare_document(args.file.expanduser().resolve(strict=True), args.formulas)
         memory = Memory(args.state)
+        if args.goal is not None:
+            memory.daily.set_goal(args.goal)
+        if args.focus_minutes is not None:
+            memory.daily.set('focus_minutes', args.focus_minutes)
+        if args.daily or (args.file is None and args.goal is not None):
+            print(f'{memory.daily.words()}/{memory.daily.goal} mots · {memory.daily.day} (jour local)')
+            return 0
         if args.history:
             for path, position, length, updated, seconds in memory.history():
                 print(f"{position / max(1, length):6.1%}  lu {duration(seconds)}  {updated} UTC  {path}")
@@ -878,6 +971,7 @@ def main(argv=None):
                 estimate_basis=basis, estimated_wpm=None if rate is None else round(rate, 1),
                 reading_number=cycles[-1][0] if cycles else 1,
                 completed_readings=completed, completed_rereadings=max(0, completed - 1),
+                daily_date=memory.daily.day, daily_words=memory.daily.words(), daily_goal=memory.daily.goal,
                 pdf_page=min(len(page_starts), bisect_right(page_starts, source_position)) if page_starts else None,
                 pdf_pages=len(page_starts) if page_starts else None,
             ), ensure_ascii=False))
