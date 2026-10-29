@@ -84,6 +84,21 @@ raccourci pour garder le total visible, y compris avec le chrono.
 Pour rendre la commande accessible depuis tous les dossiers, vous pouvez créer
 un lien vers cet exécutable dans un répertoire de votre `PATH`.
 
+### Rappel personnel dans l'en-tête
+
+Sous la ligne « Passage », un rappel discret accompagne la lecture :
+
+> Généreux, pour réussir tes projets et travailler efficacement avec l’IA, fais
+> de la lecture ton socle. Lis beaucoup pour comprendre, analyser, questionner,
+> critiquer et juger plus vite, puis agir avec discernement. Tous tes travaux
+> et tes échanges avec l’IA commencent par la lecture.
+
+« Lire, c’est conquérir le monde. » apparaît ensuite, comme dernière information
+de l'en-tête, avant la séparation avec le contenu. Le rappel est abrégé quand
+la fenêtre est moins haute ou moins large. Sur les fenêtres très petites,
+il est masqué avec la citation ; le mode ZEN masque également ces deux éléments.
+Le terminal conserve sa taille de caractères : ce bloc utilise un style atténué.
+
 ## Modes de lecture
 
 ### Lecture ZEN

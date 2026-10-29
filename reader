@@ -18,6 +18,7 @@ import sqlite3
 import subprocess
 import sys
 import termios
+import textwrap
 import time
 import unicodedata
 from pdf_preview import inspect_pdf, inspect_image
@@ -32,6 +33,26 @@ from terminal_focus import (TerminalFocus, FocusScreen, FOCUS_EVENT, is_focused,
 
 # Devise de Reader choisie par l'utilisateur, sans attribution à un auteur.
 READING_QUOTE = "Lire, c’est conquérir le monde."
+READING_REMINDER = (
+    'Généreux, pour réussir tes projets et travailler efficacement avec l’IA, '
+    'fais de la lecture ton socle. Lis beaucoup pour comprendre, analyser, '
+    'questionner, critiquer et juger plus vite, puis agir avec discernement. '
+    'Tous tes travaux et tes échanges avec l’IA commencent par la lecture.'
+)
+
+
+def reminder_lines(width, maximum):
+    variants = (
+        READING_REMINDER,
+        'Généreux, lis beaucoup pour comprendre, analyser, questionner, critiquer, '
+        'juger et agir avec l’IA. La lecture est le socle de tes projets.',
+        'Généreux, lire est la base.',
+    )
+    for variant in variants:
+        lines = textwrap.wrap(variant, width=max(1, width))
+        if len(lines) <= maximum:
+            return lines
+    return []
 
 
 def state_path():
@@ -592,6 +613,13 @@ def run_ui(screen, text, path, memory, args, position, changed, source=None, off
             if focus_large:
                 body_start = 6 if zen and not help_open else 7
                 body_height = height - body_start - (2 if zen and not help_open else 4)
+            notes_start, notes, quote_row = None, [], None
+            if spacious and not (zen and not help_open):
+                notes_start = 4 if focus_large else 3
+                notes = reminder_lines(min(96, width - 4), min(4, max(1, height - 18)))
+                quote_row = notes_start + len(notes)
+                body_start = quote_row + 3
+                body_height = height - body_start - 4
             body_width = min(76, width - 6)
             body_left = (width - body_width) // 2
             layout = (body_height, body_width)
@@ -665,14 +693,13 @@ def run_ui(screen, text, path, memory, args, position, changed, source=None, off
                 setting = f"Passage : {args.size} {unit}"
                 setting += f" · Lecture {cycle_number}"
                 hint = "    j réduire · k augmenter"
-                quote_width = sum(map(cell_width, READING_QUOTE))
-                quote_x = width - 2 - quote_width
-                quote_fits = not focus.visible and quote_x >= 2 + sum(map(cell_width, setting)) + 3
-                if width >= 65 and (not quote_fits or quote_x >= 2 + sum(map(cell_width, setting + hint)) + 3):
+                if width >= 65:
                     setting += hint
                 put(2, setting, x=2)
-                if quote_fits:
-                    put(2, READING_QUOTE, curses.A_DIM, x=quote_x)
+            if notes_start is not None:
+                for row, line in enumerate(notes, notes_start):
+                    put(row, line, curses.A_DIM, x=2)
+                put(quote_row, READING_QUOTE, curses.A_DIM, x=2)
             put(body_start - 2 if spacious else 2, "─" * (width - 4), curses.A_DIM, x=2)
             if help_open:
                 info = ["Référence du passage", "", str(path)]
