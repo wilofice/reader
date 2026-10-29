@@ -867,7 +867,7 @@ def run_ui(screen, text, path, memory, args, position, changed, source=None, off
                     clock.configure(False, not auto)
                     save(force=True)
                     selection = choose_focus(screen, memory.daily.get('focus_mode', 'timer'),
-                                             int(memory.daily.get('focus_minutes', '25')))
+                                             int(memory.daily.get('focus_minutes', '5')))
                     if selection is not None:
                         mode, minutes = selection
                         memory.daily.set('focus_mode', mode)

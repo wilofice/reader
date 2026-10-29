@@ -3,7 +3,7 @@
 import curses
 
 
-def choose_focus(screen, mode='timer', minutes=25):
+def choose_focus(screen, mode='timer', minutes=5):
     minutes = max(5, minutes)
     while True:
         screen.erase()

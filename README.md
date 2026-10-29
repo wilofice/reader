@@ -123,7 +123,9 @@ comptage du temps. Quitter ZEN conserve la position, avec adaptation du passage
 Le focus est **désactivé à l'ouverture**. Appuyez sur `f`, puis choisissez
 `c` pour un chrono (temps écoulé) ou `m` pour un minuteur (temps restant).
 Entrée démarre ; Échap annule. Dans ce menu, `j` / `k` règlent le minuteur
-par pas de 5 minutes : **minimum 5 minutes**, 25 minutes par défaut.
+par pas de 5 minutes : **minimum et durée par défaut de 5 minutes**.
+L'ancien réglage de 25 minutes est ramené une fois à 5 minutes lors de la mise
+à jour ; les durées choisies ensuite restent mémorisées.
 Démarrer une séance reprend une lecture mise en pause. Si le document est
 terminé, revenez avec `b` ou commencez une nouvelle lecture avec `N`, puis `f`.
 

@@ -17,6 +17,9 @@ class DailyReading:
                 day TEXT NOT NULL, path TEXT NOT NULL, digest TEXT NOT NULL, cycle INTEGER NOT NULL,
                 word_start INTEGER NOT NULL, word_end INTEGER NOT NULL,
                 PRIMARY KEY (day, path, digest, cycle, word_start))''')
+            migrated = db.execute("INSERT OR IGNORE INTO preferences VALUES ('focus_defaults_version', '2')").rowcount
+            if migrated:
+                db.execute("UPDATE preferences SET value='5' WHERE key='focus_minutes' AND value='25'")
 
     def get(self, key, default):
         row = self.db.execute('SELECT value FROM preferences WHERE key = ?', (key,)).fetchone()

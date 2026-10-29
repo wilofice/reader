@@ -16,6 +16,25 @@ import test_terminal
 
 
 class HabitTests(unittest.TestCase):
+    def test_default_timer_is_five_minutes_and_old_default_migrates_once(self):
+        screen = Mock()
+        screen.getmaxyx.return_value = (24, 80)
+        screen.getch.side_effect = [13]
+        self.assertEqual(choose_focus(screen), ('timer', 5))
+        with closing(sqlite3.connect(':memory:')) as db:
+            db.execute('CREATE TABLE preferences (key TEXT PRIMARY KEY, value TEXT NOT NULL)')
+            db.execute("INSERT INTO preferences VALUES ('focus_minutes', '25')")
+            db.commit()
+            daily = DailyReading(db)
+            self.assertEqual(daily.get('focus_minutes', '5'), '5')
+            daily.set('focus_minutes', 25)
+            self.assertEqual(DailyReading(db).get('focus_minutes', '5'), '25')
+        with closing(sqlite3.connect(':memory:')) as db:
+            db.execute('CREATE TABLE preferences (key TEXT PRIMARY KEY, value TEXT NOT NULL)')
+            db.execute("INSERT INTO preferences VALUES ('focus_minutes', '10')")
+            db.commit()
+            self.assertEqual(DailyReading(db).get('focus_minutes', '5'), '10')
+
     def test_ui_clocks_advance_after_a_minute_and_timer_finishes_once(self):
         reader = test_reader.reader
         for mode, ticks, expected in (('chrono', 65, '01:05'), ('timer', 65, '03:55'), ('timer', 305, '00:00')):
@@ -161,7 +180,7 @@ class HabitTests(unittest.TestCase):
         screen.getch.side_effect = [ord('j')] * 10 + [10]
         self.assertEqual(choose_focus(screen, 'timer', 25), ('timer', 5))
         screen.getch.side_effect = [ord('c'), 10]
-        self.assertEqual(choose_focus(screen), ('chrono', 25))
+        self.assertEqual(choose_focus(screen), ('chrono', 5))
         screen.getch.side_effect = [27]
         self.assertIsNone(choose_focus(screen))
 
