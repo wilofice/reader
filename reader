@@ -524,8 +524,8 @@ def run_ui(screen, text, path, memory, args, position, changed, source=None, off
     help_offset = 0
     help_lines = [
         "Raccourcis de lecture", "",
-        "n / Entrée / →    Passage suivant",
-        "b / ←             Passage précédent, puis pause",
+        "n / Entrée / → / Page suiv.    Passage suivant",
+        "b / ← / Page préc.            Passage précédent, puis pause",
         "Espace / p / P    Pause / reprise, dans tous les modes",
         "a                 Activer ou suspendre l'automatique",
         "j / k             Réduire / augmenter le passage",
@@ -888,7 +888,7 @@ def run_ui(screen, text, path, memory, args, position, changed, source=None, off
                 else:
                     notice = "Terminez cette lecture avant d'en commencer une autre."
                 continue
-            if key in (ord("n"), curses.KEY_RIGHT, curses.KEY_DOWN, 10, 13):
+            if key in (ord("n"), curses.KEY_RIGHT, curses.KEY_DOWN, curses.KEY_NPAGE, 10, 13):
                 advance = True
             elif key in (ord(' '), ord('p'), ord('P')):
                 paused, deadline = not paused, None
@@ -904,7 +904,7 @@ def run_ui(screen, text, path, memory, args, position, changed, source=None, off
                 clock.reset_passage()
                 deadline = None
                 notice = f"Passage : {args.size} {unit} (limité à la fenêtre)."
-            elif key in (ord("b"), curses.KEY_LEFT, curses.KEY_UP):
+            elif key in (ord("b"), curses.KEY_LEFT, curses.KEY_UP, curses.KEY_PPAGE):
                 position = stack.pop() if stack else previous(text, position, args.mode, args.size, body_width, body_height)
                 clock.reset_passage()
                 paused = paused or auto

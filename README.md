@@ -292,8 +292,8 @@ Toutes les anciennes formes restent acceptées. Par exemple,
 
 | Touche | Action |
 | --- | --- |
-| `n`, Entrée, flèche droite/bas | Avancer |
-| `b`, flèche gauche/haut | Revenir et suspendre l'avance automatique |
+| `n`, Entrée, flèche droite/bas, Page suivante | Avancer |
+| `b`, flèche gauche/haut, Page précédente | Revenir et suspendre l'avance automatique |
 | Espace, `p`, `P` | Pause / reprise dans tous les modes de lecture, y compris le focus et le comptage du temps ; n'avance pas en manuel |
 | `f` | Choisir un chrono ou un minuteur ; arrêter le focus s'il est déjà affiché |
 | `a` | Activer ou suspendre l'automatique |
