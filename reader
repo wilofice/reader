@@ -469,6 +469,7 @@ def run_ui(screen, text, path, memory, args, position, changed, source=None, off
     else:
         daily_text, daily_offsets = source, None
     daily_index = DailyWordIndex(daily_text, daily_offsets)
+    total_words_label = ' · ' + f'{len(daily_index.anchors):,}'.replace(',', ' ') + ' mots'
     daily_digest = hashlib.sha256(source.encode('utf-8')).hexdigest()
     focus = FocusSession()
     daily_refresh = 0.0
@@ -638,7 +639,12 @@ def run_ui(screen, text, path, memory, args, position, changed, source=None, off
             cycles = memory.cycles(path, source, digest=daily_digest)
             completed = sum(row[1] for row in cycles)
             cycle_number = cycles[-1][0] if cycles else 1
-            put(0, path.name, curses.A_BOLD, x=2)
+            title_width = max(0, min(width - 3, focus_left - 4) if focus.visible else width - 3)
+            name_width = max(0, title_width - sum(map(cell_width, total_words_label)))
+            title = clipped(path.name, name_width)
+            if sum(map(cell_width, path.name)) > name_width and name_width:
+                title = clipped(path.name, name_width - 1) + '…'
+            put(0, title + total_words_label, curses.A_BOLD, x=2)
             mode_label = {"lines": "Lignes", "words": "Mots", "scroll": "Défilement"}[args.mode]
             reading_state = "Lecture terminée" if done else "En pause · aide" if help_open else "En pause" if paused else "Lecture automatique" if auto else "Lecture manuelle"
             if not window_active:

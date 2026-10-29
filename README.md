@@ -77,6 +77,10 @@ Depuis ce dossier :
 ```
 
 Rouvrez le même fichier avec la même commande pour retrouver votre passage.
+Le titre en haut indique le total des mots du document, par exemple
+`notes.md · 12 450 mots`. Le comptage utilise le texte lisible (aperçu Markdown
+ou texte extrait du PDF), comme le suivi quotidien. Un titre trop long est
+raccourci pour garder le total visible, y compris avec le chrono.
 Pour rendre la commande accessible depuis tous les dossiers, vous pouvez créer
 un lien vers cet exécutable dans un répertoire de votre `PATH`.
 
