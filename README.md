@@ -5,6 +5,161 @@ reprise automatique et barre de progression. Python **3.10 ou supérieur** suffi
 pour le texte. Pour les PDF, installez Poppler : `brew install poppler`.
 L'aperçu visuel facultatif utilise aussi Chafa : `brew install chafa`.
 
+Suivi : [état des fonctionnalités et priorités](ETAT-DES-FONCTIONNALITES.md) ·
+[journal des évolutions](EVOLUTIONS.md).
+
+## Lire un texte copié ou collé
+
+Pour importer le presse-papiers et commencer la lecture :
+
+```sh
+./reader -c -n "Article sur la mémoire" -m w -s 80
+```
+
+Sans `-n`, Reader demande le nom. Sur macOS, le presse-papiers utilise `pbpaste`,
+déjà fourni ; Linux utilise `wl-paste`, `xclip` ou `xsel` si disponible.
+Pour coller vous-même dans le terminal, sans outil de presse-papiers :
+
+```sh
+./reader --paste -n "Mes notes"
+```
+
+Collez le contenu, puis appuyez sur Entrée et **Ctrl-D sur une ligne vide**
+pour ouvrir le lecteur. Quittez normalement avec `q`. Pour retrouver le texte :
+
+```sh
+./reader --library
+./reader --open "Mes notes" -m w -s 80
+```
+
+La reprise, les cycles et les mots quotidiens fonctionnent comme pour un fichier.
+Le contenu est conservé en Markdown dans `texts/` à côté de la base SQLite
+(`~/.local/state/reader/texts/` par défaut), et son nom est indexé dans cette base.
+Le presse-papiers peut donc changer entre deux sessions. Un nom déjà utilisé
+avec le même contenu reprend ce document ; un contenu différent exige un autre
+nom. Les noms sont insensibles à la casse ASCII. Les textes restent locaux,
+ne sont pas versionnés et ne sont pas synchronisés entre machines.
+Avec `-S`, la bibliothèque est créée à côté de la base choisie.
+Une sauvegarde doit conserver **la base et le dossier `texts/`** : copier la
+base seule ne transporte pas les textes. Les chemins enregistrés sont absolus ;
+une copie manuelle doit conserver leur emplacement pour que la reprise fonctionne.
+
+Un flux peut aussi être sauvegardé sans interface :
+`cat notes.md | ./reader --paste -n "Mes notes"`, puis `./reader --open "Mes notes"`.
+
+## Voix de lecture — premier prototype
+
+La voix est désactivée par défaut. **`t` ou `T` active/arrête la voix** ; Espace,
+`p` et `P` suspendent/reprennent. Elle lit le passage affiché puis avance à la
+fin réelle de l'audio. Elle se suspend pendant l'aide, l'aperçu des images ou
+la perte de focus du terminal. En quittant au milieu d'un passage, la reprise
+relit ce passage ; il n'y a pas encore de position audio mot à mot.
+
+Essai immédiat sur macOS, sans modèle supplémentaire :
+
+```sh
+./reader "document.pdf" -m w -s 80 --tts say --speak
+```
+
+Pour choisir une voix macOS, listez-les avec `say -v '?'`, puis ajoutez
+`--voice NOM`. Pour Phonon français, installez et démarrez Ollama **0.40.9+**
+compatible avec son API audio :
+
+```sh
+ollama --version
+./reader "document.pdf" -m w -s 80 --tts ollama --speech-model phonon:40m-fr --speak
+```
+
+Ollama doit être installé et démarré. **Au premier `t` ou `T`, Reader télécharge
+automatiquement Phonon s'il manque**, puis prépare le passage. Le panneau
+pédagogique fait de même pour son modèle texte. Le téléchargement s'effectue
+sur le serveur configuré par `--ollama-url`; son avancement apparaît dans
+l'interface. Il faut une connexion Internet et assez d'espace disque la
+première fois sur chaque serveur. Les modèles ne sont pas inclus dans Git.
+Pour l'anglais, choisissez `--speech-model phonon:31m-en`; il sera téléchargé
+à sa première utilisation.
+`--voice default` utilise la voix du modèle ; `ollama show NOM_DU_MODELE`
+indique les voix disponibles. Reader ne met pas à jour les modèles déjà installés.
+La variante française 40M est sous CC BY-NC 4.0 ; l'anglais 31M sous Apache 2.0.
+Les paquets audio Ollama actuels nécessitent Apple Silicon.
+[Modèles et licences](https://ollama.com/library/phonon).
+
+Au tempo normal, macOS utilise son lecteur natif `afplay`, même si FFplay est
+installé. FFplay est utilisé pour changer le tempo et pour les autres systèmes.
+Pour modifier le tempo sans changer la hauteur de la voix :
+
+```sh
+brew install ffmpeg
+./reader --open "Mes notes" --speak --audio-rate 1.2
+```
+
+Pendant la voix, `+`/`-` règlent le tempo entre ×0,5 et ×2 et relisent le passage
+courant. Ce multiplicateur n'est pas une promesse de mots/minute. `-w` conserve
+son rôle pour l'avance automatique silencieuse et règle le débit initial de
+`say` ; l'API Phonon n'accepte pas de vitesse native.
+[API audio Ollama](https://docs.ollama.com/capabilities/speech).
+
+Ce prototype prépare **un passage à la fois**, dans un répertoire temporaire
+supprimé à la fermeture ; il n'exporte pas de livre audio ni de cache durable.
+La préparation n'est pas comptée comme de l'écoute. Une erreur met la lecture
+en pause sans valider le passage. `a` revient à l'avance automatique silencieuse.
+Le temps restant audio n'est pas encore estimé ; l'écran l'indique explicitement.
+Les formules et tableaux sont lus comme du texte, sans interprétation spéciale.
+La génération Phonon et la lecture native ont été vérifiées avec Ollama 0.40.13
+sur cette machine : audio non silencieux, pause/reprise et fin de lecture
+(test du lecteur à volume nul). Cela ne constitue pas une évaluation de la
+qualité vocale ou de la fatigue à l'écoute. La synthèse macOS a aussi été vérifiée.
+Si FFplay signale une bibliothèque Homebrew manquante, utilisez le tempo ×1,
+ou réparez son installation avec `brew reinstall ffmpeg` pour les autres tempos.
+
+## Accompagnement pédagogique — premier prototype local
+
+Le modèle texte par défaut est `granite4:latest` et sera téléchargé au premier
+usage du panneau si nécessaire. Vous pouvez en choisir un autre avec
+`--llm-model NOM` :
+
+```sh
+./reader "document.pdf" --companion
+```
+
+Le premier appel à une aide (`1` à `5`) déclenche le téléchargement si le
+modèle sélectionné n'est pas encore présent. Pour utiliser un autre modèle :
+`./reader "document.pdf" --companion --llm-model NOM_DU_MODELE`.
+
+`--companion` ouvre le panneau au démarrage ; **`e`** l'ouvre ou le ferme ensuite.
+L'ouverture par `e` met la lecture en pause ; Espace permet de reprendre.
+Aucune génération n'est automatique :
+
+| Touche, panneau ouvert | Aide demandée |
+| --- | --- |
+| `1` | Contexte du passage |
+| `2` | Question ouverte ; `R` révèle une réponse possible |
+| `3` | Indice pour réfléchir |
+| `4` | Résumé |
+| `5` | QCM ; répondre avec `A`, `B`, `C` ou `D` avant correction |
+| `{` / `}` | Défiler dans la réponse |
+
+Une demande suspend la lecture pour laisser réfléchir. Le panneau occupe la
+colonne droite à partir de 110 colonnes ; dans une fenêtre étroite, il remplace
+temporairement le texte et suspend sa progression. ZEN masque le panneau.
+Le changement de passage annule la demande précédente et efface sa réponse.
+
+Le serveur reçoit le texte affiché du passage, limité à 8 000 caractères,
+avec des instructions pédagogiques ; aucun PDF complet ni image n'est envoyé.
+`--ollama-url` configure le serveur utilisé par la voix et l'accompagnement
+(défaut : `http://127.0.0.1:11434`). Le nom du modèle est affiché dans le panneau.
+Le repère de page/ligne vient de Reader ; la citation d'appui doit exister dans
+le passage. Cela ne garantit pas la justesse du contenu généré, marqué « IA ·
+à vérifier ». La lecture ne dépend pas de la disponibilité du serveur.
+
+Les réponses sont conservées sous `~/.cache/reader/enrichment-v1/`, ou sous
+`$XDG_CACHE_HOME/reader/enrichment-v1/`. Supprimer ce cache ne supprime pas la
+progression. Les QCM ne sont pas encore un historique d'apprentissage ; les
+mots proposés ne constituent pas encore un dictionnaire personnel.
+Le fournisseur payant et la sélection d'un mot restent à développer. Un essai
+local avec `granite4:latest` a vérifié les échanges ; la qualité pédagogique sur
+des documents variés reste à évaluer. Aucun service payant n'est appelé.
+
 ## Installer sur un autre Mac
 
 Depuis le dépôt cloné, installez les dépendances avec une seule commande :

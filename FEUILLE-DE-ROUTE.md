@@ -1,5 +1,10 @@
 # Reader : documents enrichis, relectures et lecture ZEN
 
+> État et priorités actualisés : [ETAT-DES-FONCTIONNALITES.md](ETAT-DES-FONCTIONNALITES.md).
+> Changements datés : [EVOLUTIONS.md](EVOLUTIONS.md). Les propositions ci-dessous
+> ne sont pas toutes implémentées. Depuis le 31 octobre 2026, l'ordre retenu est :
+> textes collés nommés, voix de lecture, puis accompagnement pédagogique.
+
 Compte rendu des demandes du 27 octobre 2026. **Première livraison : ZEN,
 cycles de lecture, références, aperçu visuel de page PDF et images Markdown locales** ; les autres fonctions restent
 des propositions à développer. L'aperçu affiche la page entière avec Poppler et

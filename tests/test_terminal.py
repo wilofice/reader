@@ -18,6 +18,29 @@ EXECUTABLE = str(Path(__file__).resolve().parents[1] / "reader")
 
 
 class TerminalTests(unittest.TestCase):
+    def test_pasted_text_is_saved_and_reopened_by_name(self):
+        with tempfile.TemporaryDirectory() as directory:
+            state = str(Path(directory) / 'state.sqlite3')
+            self.session(['--paste', '-n', 'Mon extrait', '-S', state, '-m', 'w', '-s', '2'],
+                         [(.2, 'un deux trois quatre cinq six\n'.encode()), (.1, b'\x04'),
+                          (.3, b'n'), (.2, b'q')])
+            args = ['--open', 'Mon extrait', '-S', state, '-m', 'w', '-s', '2']
+            saved = self.status(args)
+            self.assertGreater(saved['position'], 0)
+            self.session(args, [(.2, b'q')])
+            self.assertEqual(self.status(args)['position'], saved['position'])
+
+    def test_companion_panel_and_zen_do_not_change_progress(self):
+        with tempfile.TemporaryDirectory() as directory:
+            document = Path(directory) / 'notes.txt'
+            document.write_text('La mémoire permet de retenir.\n' * 20)
+            args = [str(document), '-S', str(Path(directory) / 'state.sqlite3')]
+            output = self.session(args, [(.2, b'e'), (.1, b'1'), (.2, b'z'), (.1, b'z'), (.1, b'e'), (.1, b'q')],
+                                  terminal_size=(35, 130))
+            self.assertIn(b'Accompagnement IA', output)
+            self.assertIn(b'--llm-model', output)
+            self.assertEqual(self.status(args)['position'], 0)
+
     def test_space_pauses_manual_reading_without_advancing_and_p_remains_an_alias(self):
         with tempfile.TemporaryDirectory() as directory:
             folder = Path(directory)

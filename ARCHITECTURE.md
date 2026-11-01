@@ -23,6 +23,14 @@ avec Quick Look comme solution macOS complémentaire.
   validés évitent le double comptage après un retour ou une réouverture.
 - `focus_ui.py` : choix explicite du chrono ou du minuteur, sans activation
   automatique ni changement du rythme de lecture.
+- `saved_texts.py` : bibliothèque SQLite de textes nommés, fichiers Markdown
+  conservés à côté de la base, import presse-papiers ou terminal.
+- `speech.py` : synthèse dans un processus distinct, fichier temporaire et
+  lecture audio suspendable ; la fin du lecteur audio entraîne l'avance.
+- `ollama_models.py` : téléchargement à la demande des modèles absents via
+  l'API du serveur Ollama, avec progression visible dans l'interface.
+- `enrichment.py` : demandes pédagogiques Ollama dans un processus distinct,
+  réponses structurées et cache, citation vérifiée dans le passage source.
 
 Le repérage est indépendant de la taille des passages. L'interface associe les
 pages couvertes par le texte affiché à leurs indices. Une mention textuelle
@@ -61,5 +69,11 @@ et rendus ne sont pas versionnés. La validation couvre des pages de formules
 manquées auparavant et une page rasterisée pour simuler un scan ; l'amélioration
 du rappel et des fausses alertes sur d'autres documents reste à évaluer.
 
-La voix et les enrichissements pédagogiques viendront ensuite comme services
-optionnels de la session ; ils ne doivent pas conditionner la lecture simple.
+La voix et les enrichissements pédagogiques sont désormais des prototypes
+optionnels. Ils ne conditionnent pas la lecture simple. Leurs processus sont
+arrêtés à la fermeture ; une demande pédagogique est annulée au changement de
+passage. La synchronisation audio reste au passage, sans horodatage mot à mot.
+La chaîne Phonon a été testée avec Ollama 0.40.13 ; macOS préfère `afplay` au
+tempo normal, pour ne pas dépendre d'une installation FFplay potentiellement
+endommagée. FFplay gère les changements de tempo. Les adaptateurs payants,
+Kokoro et la comparaison à l'écoute restent à traiter.

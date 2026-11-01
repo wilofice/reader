@@ -27,6 +27,9 @@ from visual_hints import PdfVisualIndex, label as visual_label
 from formula_index import FormulaIndex, EnrichedIndex, available as formulas_available, prepare_document
 from reading_habits import DailyReading, DailyWordIndex, FocusSession, big_clock
 from focus_ui import choose_focus
+from saved_texts import SavedTexts, clipboard_text
+from speech import Speech
+from enrichment import Companion, MODES as COMPANION_MODES
 from terminal_focus import (TerminalFocus, FocusScreen, FOCUS_EVENT, is_focused,
                             enable_reports, disable_reports)
 
@@ -37,7 +40,9 @@ READING_REMINDER = (
     'Généreux, pour réussir tes projets et travailler efficacement avec l’IA, '
     'fais de la lecture ton socle. Lis beaucoup pour comprendre, analyser, '
     'questionner, critiquer et juger plus vite, puis agir avec discernement. '
-    'Tous tes travaux et tes échanges avec l’IA commencent par la lecture.'
+    'Tous tes travaux et tes échanges avec l’IA commencent par la lecture. '
+    'Toujours utiliser le sticky note et noter au moins un mot : '
+    'un seul suffit pour éveiller tes intuitions et activer tes neurones.'
 )
 
 
@@ -45,8 +50,11 @@ def reminder_lines(width, maximum):
     variants = (
         READING_REMINDER,
         'Généreux, lis beaucoup pour comprendre, analyser, questionner, critiquer, '
-        'juger et agir avec l’IA. La lecture est le socle de tes projets.',
-        'Généreux, lire est la base.',
+        'juger et agir avec l’IA. La lecture est le socle de tes projets. '
+        'Toujours utiliser le sticky note : un seul mot suffit pour éveiller '
+        'tes intuitions et activer tes neurones.',
+        'Généreux, lire est la base. Sticky note : note au moins un mot '
+        'pour éveiller tes intuitions et activer tes neurones.',
     )
     for variant in variants:
         lines = textwrap.wrap(variant, width=max(1, width))
@@ -497,6 +505,14 @@ def run_ui(screen, text, path, memory, args, position, changed, source=None, off
     daily_day = memory.daily.day
     daily_words, daily_goal = memory.daily.words(), memory.daily.goal
     images = markdown_images(source, path) if path.suffix.lower() in ('.md', '.markdown', '.mdown') else []
+    speech = None
+    voice_enabled = getattr(args, 'speak', False)
+    voice_error = False
+    audio_rate = getattr(args, 'audio_rate', 1.0)
+    companion = None
+    panel_open = getattr(args, 'companion', False)
+    panel_passage = None
+    panel_offset = 0
 
     def source_position():
         return offsets[position] if offsets is not None else position
@@ -527,6 +543,12 @@ def run_ui(screen, text, path, memory, args, position, changed, source=None, off
         "n / Entrée / → / Page suiv.    Passage suivant",
         "b / ← / Page préc.            Passage précédent, puis pause",
         "Espace / p / P    Pause / reprise, dans tous les modes",
+        "t / T             Activer / arrêter la voix",
+        "e                 Ouvrir / fermer l'accompagnement IA",
+        "1 à 5 (panneau)   Contexte, question, indice, résumé, QCM",
+        "A à D / R         Répondre au QCM / révéler une réponse ouverte",
+        "{ / }             Défiler dans l'accompagnement",
+        "+ / - avec voix   Tempo audio ; relit le passage courant",
         "a                 Activer ou suspendre l'automatique",
         "j / k             Réduire / augmenter le passage",
         "+ / -             Accélérer / ralentir de 25 mots/min",
@@ -595,6 +617,8 @@ def run_ui(screen, text, path, memory, args, position, changed, source=None, off
                         pass
 
             if height < 8 or width < 35:
+                if speech:
+                    speech.pause()
                 clock.configure(False, not auto)
                 put(0, "Agrandissez le terminal (35 × 8 min).", chrome=False)
                 put(1, "q : quitter et sauvegarder", chrome=False)
@@ -620,8 +644,13 @@ def run_ui(screen, text, path, memory, args, position, changed, source=None, off
                 quote_row = notes_start + len(notes)
                 body_start = quote_row + 3
                 body_height = height - body_start - 4
-            body_width = min(76, width - 6)
-            body_left = (width - body_width) // 2
+            panel_visible = panel_open and not zen and not help_open
+            panel_side = panel_visible and width >= 110
+            panel_overlay = panel_visible and not panel_side
+            body_width = min(76, int(width * 0.60) - 5) if panel_side else min(76, width - 6)
+            body_left = 2 if panel_side else (width - body_width) // 2
+            panel_left = body_left + body_width + 4 if panel_side else body_left
+            panel_width = width - panel_left - 3 if panel_side else body_width
             layout = (body_height, body_width)
             if layout != last_layout:
                 deadline = None
@@ -631,10 +660,34 @@ def run_ui(screen, text, path, memory, args, position, changed, source=None, off
             visible, end = page(text, position, args.mode, args.size, body_width, body_height)
             step = visible[0][1] if args.mode == "scroll" and visible else end
             done = position >= len(text)
+            current_panel_passage = (position, step)
+            if current_panel_passage != panel_passage:
+                if companion:
+                    companion.cancel()
+                panel_passage, panel_offset = current_panel_passage, 0
+            if companion:
+                companion.poll()
             if done:
                 auto = False
-            clock.configure(not done and not paused and not help_open and window_active, not auto)
-            if auto and not paused and not help_open and window_active and deadline is None:
+            audio_active = not done and not paused and not help_open and not panel_overlay and window_active
+            if voice_enabled and not done:
+                if speech is None:
+                    speech = Speech(getattr(args, 'tts', 'ollama'), getattr(args, 'speech_model', 'phonon:40m-fr'),
+                                    getattr(args, 'voice', 'default'), getattr(args, 'ollama_url', 'http://127.0.0.1:11434'),
+                                    args.wpm)
+                try:
+                    speech.sync((position, step, audio_rate), text[position:step], audio_active, audio_rate)
+                except (OSError, ValueError) as error:
+                    notice = str(error)
+                    voice_error = True
+                    voice_enabled, paused = False, True
+                    speech.stop()
+                deadline = None
+            elif speech:
+                speech.stop()
+            clock.configure(audio_active and not paused and (not voice_enabled or speech.state == 'playing'),
+                            not auto and not voice_enabled)
+            if auto and not voice_enabled and audio_active and deadline is None:
                 words = max(1, words_index.count(position, step))
                 deadline = time.monotonic() + max(0.25, words * 60 / speed)
 
@@ -642,6 +695,8 @@ def run_ui(screen, text, path, memory, args, position, changed, source=None, off
                 words_index, position, stats, auto, speed, step,
                 None if deadline is None else deadline - time.monotonic(),
             )
+            if voice_enabled and not done:
+                estimate, basis, rate = None, 'audio', None
             page_label = ""
             visual_hint, visual_pending, visual_pages = None, False, []
             if page_starts:
@@ -687,6 +742,10 @@ def run_ui(screen, text, path, memory, args, position, changed, source=None, off
                 metadata = f"{mode_label} · {rhythm} · {reading_state}"
             if done:
                 metadata = f"{mode_label} · {reading_state}"
+            if voice_enabled and speech and not done:
+                metadata = f'{mode_label} · Voix : {speech.label} · ×{audio_rate:.1f} · t arrêter'
+            elif voice_error:
+                metadata = 'Voix indisponible · i : détails et commande de réparation'
             put(1, metadata, accent, x=2)
             unit = "mots" if args.mode == "words" else "lignes"
             if spacious:
@@ -735,7 +794,7 @@ def run_ui(screen, text, path, memory, args, position, changed, source=None, off
                 help_offset = min(help_offset, max(0, len(help_view) - body_height))
                 for index, line in enumerate(help_view[help_offset:help_offset + body_height]):
                     put(body_start + index, line, curses.A_BOLD if help_offset + index == 0 else 0, x=body_left)
-            else:
+            elif not panel_overlay:
                 for index, (_, _, line) in enumerate(visible):
                     put(body_start + index, line, x=body_left, chrome=False)
                 if done:
@@ -750,7 +809,20 @@ def run_ui(screen, text, path, memory, args, position, changed, source=None, off
                 elif unavailable:
                     page_status += " · analyse incomplète"
                 put(height - 2, notice or page_status, curses.A_DIM)
-            if visual_message and not help_open:
+            if panel_visible:
+                if companion is None:
+                    companion = Companion(getattr(args, 'llm_model', ''),
+                                          getattr(args, 'ollama_url', 'http://127.0.0.1:11434'))
+                panel_text = '\n'.join(companion.display())
+                panel_lines = [row[2] for row in rows(panel_text, 0, len(panel_text), panel_width, len(panel_text))]
+                panel_offset = min(panel_offset, max(0, len(panel_lines) - body_height))
+                for index, line in enumerate(panel_lines[panel_offset:panel_offset + body_height]):
+                    put(body_start + index, clipped(line, panel_width),
+                        curses.A_DIM if index else accent, x=panel_left, chrome=False)
+                if panel_side:
+                    for row in range(body_start, body_start + body_height):
+                        put(row, '│', curses.A_DIM, x=panel_left - 2)
+            if visual_message and not help_open and not panel_overlay:
                 # Keep the cue in the reading column, without moving the passage.
                 hint_row = (body_start - 1 if focus.visible else 0) if zen else body_start - 1
                 hint_left = min(body_left, max(2, width - 2 - sum(map(cell_width, visual_message))))
@@ -762,6 +834,8 @@ def run_ui(screen, text, path, memory, args, position, changed, source=None, off
             bar = "█" * filled + partial + "░" * (bar_width - filled - bool(partial))
             put(height - 3, f"[{bar}] {fraction:6.1%}", accent)
             remaining_label = "calibrage" if estimate is None else ("" if basis == "complete" else "≈ ") + duration(estimate, rounded_up=True)
+            if basis == 'audio':
+                remaining_label = 'non estimé (audio)'
             estimate_label = "auto" if basis == "configured_speed" else "observé" if basis == "observed_manual_speed" else ""
             timing = f"Temps cumulé : {duration(stats.seconds)} · Reste {remaining_label} {estimate_label}"
             if width < 65:
@@ -792,7 +866,7 @@ def run_ui(screen, text, path, memory, args, position, changed, source=None, off
                 else:
                     put(0, f'Focus {focus_marker} {focus.display}', accent | curses.A_BOLD, x=focus_left, chrome=False)
             screen.refresh()
-            wait_ms = 1000
+            wait_ms = 100 if voice_enabled else 250 if companion and companion.process else 1000
             if visual_pending and window_active:
                 wait_ms = 250
             if deadline is not None and window_active:
@@ -817,6 +891,8 @@ def run_ui(screen, text, path, memory, args, position, changed, source=None, off
                 deadline = None
                 continue
             if key == ord("v") and not help_open:
+                if speech:
+                    speech.pause()
                 if not page_starts and not passage_images:
                     notice = "Aucune image locale dans ce passage ; aperçu disponible pour les PDF."
                     continue
@@ -853,11 +929,43 @@ def run_ui(screen, text, path, memory, args, position, changed, source=None, off
                 elif key in (curses.KEY_UP, curses.KEY_PPAGE):
                     help_offset = max(0, help_offset - 1)
                 continue
+            if key == ord('e'):
+                panel_open = not panel_open
+                if panel_open:
+                    paused = True
+                    notice = 'Accompagnement ouvert · 1 à 5 : choisir · Espace : reprendre · e fermer.'
+                elif companion:
+                    companion.cancel()
+                deadline = None
+                continue
+            if panel_visible and key in map(ord, COMPANION_MODES):
+                paused, deadline, panel_offset = True, None, 0
+                if speech:
+                    speech.pause()
+                reference = f'p. PDF {page_label}' if page_starts else f'Ligne source {source.count(chr(10), 0, source_position()) + 1}'
+                try:
+                    companion.request(text[position:step], COMPANION_MODES[chr(key)], reference)
+                except (OSError, ValueError) as error:
+                    notice = str(error)
+                continue
+            if panel_visible and key in (ord('{'), ord('}')):
+                panel_offset = max(0, panel_offset + (-max(1, body_height // 2) if key == ord('{') else max(1, body_height // 2)))
+                continue
+            if panel_visible and companion and companion.result:
+                if companion.mode == 'qcm' and key in map(ord, 'ABCD'):
+                    if companion.choice is None:
+                        companion.choice = key - ord('A')
+                    continue
+                if companion.mode == 'question' and key == ord('R'):
+                    companion.revealed = True
+                    continue
             if key == ord("z"):
                 zen = not zen
                 deadline = None
                 continue
             if key == ord('f'):
+                if speech:
+                    speech.pause()
                 if focus.visible:
                     focus.stop()
                     notice = 'Focus arrêté.'
@@ -888,15 +996,32 @@ def run_ui(screen, text, path, memory, args, position, changed, source=None, off
                 else:
                     notice = "Terminez cette lecture avant d'en commencer une autre."
                 continue
-            if key in (ord("n"), curses.KEY_RIGHT, curses.KEY_DOWN, curses.KEY_NPAGE, 10, 13):
+            if key in (ord('t'), ord('T')):
+                voice_error = False
+                voice_enabled = not voice_enabled
+                notice = 'Voix activée · Espace : pause/reprise · t : arrêter.' if voice_enabled else 'Voix arrêtée.'
+                auto, deadline = False, None
+                if voice_enabled:
+                    paused = False
+                elif speech:
+                    speech.stop()
+                clock.reset_passage()
+            elif key in (ord("n"), curses.KEY_RIGHT, curses.KEY_DOWN, curses.KEY_NPAGE, 10, 13):
                 advance = True
             elif key in (ord(' '), ord('p'), ord('P')):
                 paused, deadline = not paused, None
             elif key == ord("a"):
+                voice_enabled = False
+                if speech:
+                    speech.stop()
                 auto, deadline = not auto, None
                 paused = not auto
             elif key in (ord("+"), ord("="), ord("-")):
-                speed = max(10, min(3000, speed + (-25 if key == ord("-") else 25)))
+                if voice_enabled:
+                    audio_rate = round(max(0.5, min(2.0, audio_rate + (-0.1 if key == ord('-') else 0.1))), 1)
+                    notice = 'Tempo audio modifié ; reprise du passage courant.'
+                else:
+                    speed = max(10, min(3000, speed + (-25 if key == ord("-") else 25)))
                 deadline = None
             elif key in (ord("j"), ord("k"), ord("["), ord("]")):
                 amount = 10 if args.mode == "words" else 1
@@ -907,14 +1032,16 @@ def run_ui(screen, text, path, memory, args, position, changed, source=None, off
             elif key in (ord("b"), curses.KEY_LEFT, curses.KEY_UP, curses.KEY_PPAGE):
                 position = stack.pop() if stack else previous(text, position, args.mode, args.size, body_width, body_height)
                 clock.reset_passage()
-                paused = paused or auto
+                paused = paused or auto or voice_enabled
                 auto, deadline = False, None
             elif key == ord("g"):
                 stack.append(position)
                 position, auto, deadline = 0, False, None
                 clock.reset_passage()
                 paused = False
-            elif key == -1 and auto and not paused and deadline is not None and time.monotonic() >= deadline:
+            elif key == -1 and voice_enabled and speech and speech.finished and audio_active:
+                advance = True
+            elif key == -1 and auto and not voice_enabled and audio_active and deadline is not None and time.monotonic() >= deadline:
                 advance = True
             if advance and not done:
                 clock.complete_passage(words_index.count(position, step))
@@ -928,6 +1055,11 @@ def run_ui(screen, text, path, memory, args, position, changed, source=None, off
                 deadline = None
                 notice = ""
     finally:
+        clock.configure(False, False)
+        if speech:
+            speech.close()
+        if companion:
+            companion.close()
         save(force=True)
 
 
@@ -943,6 +1075,13 @@ def focus_minutes(value):
     if minutes < 5:
         raise argparse.ArgumentTypeError('La durée minimum est de 5 minutes.')
     return minutes
+
+
+def audio_tempo(value):
+    rate = float(value)
+    if not math.isfinite(rate) or not 0.5 <= rate <= 2:
+        raise argparse.ArgumentTypeError('Le tempo audio doit être compris entre 0.5 et 2.')
+    return rate
 
 
 def run_with_focus(screen, *args):
@@ -961,6 +1100,20 @@ def run_with_focus(screen, *args):
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("file", nargs="?", type=Path, help="fichier texte, Markdown ou PDF")
+    imports = parser.add_mutually_exclusive_group()
+    imports.add_argument('-c', '--clipboard', action='store_true', help='importer le presse-papiers et lire')
+    imports.add_argument('--paste', action='store_true', help='coller un texte, puis Ctrl-D pour lire')
+    imports.add_argument('--open', dest='saved_name', metavar='NOM', help='reprendre un texte importé par son nom')
+    imports.add_argument('--library', action='store_true', help='lister les textes importés et leur progression')
+    parser.add_argument('-n', '--name', help='nom du texte à importer (sinon demandé dans le terminal)')
+    parser.add_argument('--speak', action='store_true', help='activer la voix dès l’ouverture (sinon touche t)')
+    parser.add_argument('--tts', choices=('ollama', 'say'), default='ollama', help='moteur vocal, utilisé seulement à la demande')
+    parser.add_argument('--speech-model', default='phonon:40m-fr', help='modèle vocal Ollama')
+    parser.add_argument('--voice', default='default', help='voix du moteur choisi')
+    parser.add_argument('--audio-rate', type=audio_tempo, default=1.0, help='tempo audio de 0.5 à 2 (FFmpeg si différent de 1)')
+    parser.add_argument('--ollama-url', default='http://127.0.0.1:11434', help='adresse du serveur Ollama local')
+    parser.add_argument('--companion', action='store_true', help='ouvrir le panneau pédagogique (touche e)')
+    parser.add_argument('--llm-model', default='granite4:latest', help='modèle texte Ollama (téléchargé à sa première utilisation)')
     parser.add_argument("-m", "--mode", choices=("l", "w", "s", "lines", "words", "scroll"), default="lines", help="l = lignes, w = mots, s = défilement (noms longs acceptés)")
     parser.add_argument("-s", "--size", type=positive, help="lignes ou mots par passage (défaut : 15 lignes / 120 mots)")
     parser.add_argument("-a", "--auto", action="store_true", help="avancer automatiquement")
@@ -984,9 +1137,20 @@ def main(argv=None):
     args = parser.parse_args(argv)
     args.mode = {"l": "lines", "w": "words", "s": "scroll"}.get(args.mode, args.mode)
     args.size = args.size or (120 if args.mode == "words" else 15)
+    importing = args.clipboard or args.paste
+    saved_action = importing or args.saved_name is not None or args.library
+    if args.file and saved_action:
+        parser.error('choisissez un fichier ou une action de bibliothèque')
+    if args.name is not None and not importing:
+        parser.error('--name nécessite --clipboard ou --paste')
+    if saved_action and (args.history or args.daily or args.prepare):
+        parser.error('la bibliothèque ne se combine pas avec --history, --daily ou --prepare')
+    if args.library and (args.status or args.readings or args.new_reading or args.restart
+                         or args.goal is not None or args.focus_minutes is not None):
+        parser.error('--library liste les textes et s’utilise sans option de progression ou de réglage mémorisé')
     if args.new_reading and (args.restart or args.status or args.history or args.readings or args.daily):
         parser.error("--new-reading s'utilise seul avec les options de lecture")
-    if not args.file and not args.history and not args.daily and args.goal is None:
+    if not args.file and not saved_action and not args.history and not args.daily and args.goal is None:
         parser.error("indiquez un fichier, --daily ou --history")
     if args.daily and (args.status or args.history or args.readings):
         parser.error('--daily s’utilise sans autre option de consultation')
@@ -999,6 +1163,33 @@ def main(argv=None):
         if args.prepare:
             return prepare_document(args.file.expanduser().resolve(strict=True), args.formulas)
         memory = Memory(args.state)
+        if saved_action:
+            library = SavedTexts(memory.db, args.state)
+            if args.library:
+                entries = library.entries()
+                for name, created, position, length in entries:
+                    print(f'{position / max(1, length):6.1%}  {created} UTC  {name}')
+                if not entries:
+                    print('Aucun texte importé. Utilisez reader --clipboard --name "Mon texte".')
+                return 0
+            if args.saved_name is not None:
+                args.file = library.find(args.saved_name)
+            else:
+                name = args.name
+                if name is None:
+                    if not sys.stdin.isatty():
+                        raise ValueError('Indiquez --name pour nommer le texte importé.')
+                    name = input('Nom du texte : ')
+                if args.clipboard:
+                    imported_text = clipboard_text()
+                else:
+                    if sys.stdin.isatty():
+                        print('Collez votre texte, puis Entrée et Ctrl-D sur une ligne vide.', flush=True)
+                    imported_text = sys.stdin.read()
+                args.file = library.save(name, imported_text)
+                if not sys.stdin.isatty() and not (args.status or args.readings):
+                    print(f'Texte sauvegardé : {name}. Reprendre avec reader --open {json.dumps(name, ensure_ascii=False)}')
+                    return 0
         if args.goal is not None:
             memory.daily.set_goal(args.goal)
         if args.focus_minutes is not None:
@@ -1077,7 +1268,7 @@ def main(argv=None):
         print('\nPréparation interrompue ; pages déjà préparées conservées.' if args.prepare
               else "\nLecture interrompue ; position sauvegardée.")
         return 130
-    except (OSError, ValueError, LookupError, sqlite3.Error, curses.error) as error:
+    except (OSError, ValueError, LookupError, EOFError, sqlite3.Error, curses.error) as error:
         print(f"reader : {error}", file=sys.stderr)
         return 1
     finally:
