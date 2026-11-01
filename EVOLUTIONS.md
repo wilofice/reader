@@ -4,6 +4,30 @@ Ce journal commence le 31 octobre 2026. Pour les changements antérieurs,
 consulter Git ; l'état consolidé est dans
 [ETAT-DES-FONCTIONNALITES.md](ETAT-DES-FONCTIONNALITES.md).
 
+## 2 novembre 2026 — Prototype de bibliothèque de lecture
+
+- Ajout d'un catalogue terminal de onze lectures, avec progression par édition,
+  liens d'acquisition, statut d'accès et téléchargement depuis des URL PDF
+  officielles. `./reader --catalog` liste ou ouvre le sélecteur interactif ;
+  `--download-library`, `--download-book ID`, `--open-book ID` et
+  `--attach-book ID CHEMIN` couvrent acquisition, rattachement et lecture.
+- Sept PDF ont été téléchargés dans `~/.local/share/reader/library/`, hors Git :
+  manuel de finance OpenStax 2e (2026), BRI AER 2026, résumé GIEC AR6, OCDE
+  2023, Banque mondiale WDR 2026, article Transformer sur arXiv et PNUD HDR
+  2025. Reader retrouve leurs positions via
+  la mémoire SQLite habituelle.
+- L'AIE demande la création d'un compte gratuit pour télécharger le WEO complet ;
+  Reader conserve son lien sans contourner cette étape. Le téléchargement du
+  WEO FMI a répondu HTTP 403 sur cette machine. Ces fiches restent ouvrables par
+  source officielle ou rattachement d'un document local.
+- La recherche n'a trouvé aucun téléchargement complet gratuit autorisé pour
+  *The World* ou *The Effective Executive*. Le premier est référencé pour la
+  localisation en bibliothèque ; le second dispose d'un aperçu éditeur et peut
+  se trouver à l'emprunt selon les bibliothèques. Les copies détenues par
+  l'utilisateur peuvent être rattachées ; aucune copie non autorisée n'a été
+  récupérée. La source finance a été remplacée par le manuel libre OpenStax ;
+  Damodaran reste une référence avancée possible, mais commerciale.
+
 ## 1 novembre 2026 — Stratégie de bibliothèque de lecture
 
 - Structuration de l'objectif : constituer une culture générale et stratégique

@@ -7,7 +7,42 @@ L'aperçu visuel facultatif utilise aussi Chafa : `brew install chafa`.
 
 Suivi : [état des fonctionnalités et priorités](ETAT-DES-FONCTIONNALITES.md) ·
 [journal des évolutions](EVOLUTIONS.md) ·
-[stratégie de la future bibliothèque de culture générale](STRATEGIE-BIBLIOTHEQUE-CULTURE.md).
+[stratégie et catalogue de la bibliothèque de culture générale](STRATEGIE-BIBLIOTHEQUE-CULTURE.md).
+
+## Bibliothèque de culture générale
+
+Ouvrez le catalogue terminal avec `./reader --catalog`. Les flèches déplacent
+la sélection ; Entrée reprend un document présent, `d` télécharge un document
+officiel disponible, et `a` affiche la commande pour rattacher un PDF personnel.
+Hors terminal interactif, `--catalog` affiche la liste et son état.
+
+```sh
+./reader --catalog
+./reader --download-library
+./reader --download-book bis-aer-2026
+./reader --open-book bis-aer-2026 -m w -s 80
+./reader --attach-book the-world-haass ~/Downloads/the-world.pdf
+./reader --open-book the-world-haass -m w -s 80
+```
+
+Les fiches initiales sont dans `reading_catalog.json`. Les PDF téléchargés sont
+rangés dans `~/.local/share/reader/library/` (ou `$XDG_DATA_HOME/reader/library/`)
+et ne sont pas ajoutés à Git. Les liens locaux et la progression utilisent la
+base SQLite Reader ; copier la base **et** le dossier bibliothèque conserve
+les téléchargements. Les fichiers rattachés ailleurs gardent un chemin absolu :
+sur une autre machine, recopiez-les au même chemin ou rattachez-les à nouveau.
+`--download-library`
+télécharge les sources officielles directement accessibles, puis affiche toute
+source qui exige un compte ou refuse l'accès depuis le réseau courant. Il ne
+contourne pas les comptes des éditeurs et ne récupère pas les livres commerciaux.
+
+Sept fichiers sont déjà téléchargés ici : manuel OpenStax de finance, rapports
+BRI, GIEC, OCDE, Banque mondiale et PNUD, ainsi que l'article arXiv sur Transformer. Le téléchargement
+du WEO du FMI a reçu une réponse HTTP 403 depuis cette machine ; son lien
+officiel reste dans le catalogue. Le PDF complet de l'AIE demande un compte
+gratuit. Les livres de Haass et Drucker restent à acheter, emprunter ou rattacher
+depuis un fichier que vous avez obtenu légalement. Damodaran est une référence
+payante possible pour une étape ultérieure, pas l'entrée finance du prototype.
 
 ## Lire un texte copié ou collé
 

@@ -28,6 +28,7 @@ from formula_index import FormulaIndex, EnrichedIndex, available as formulas_ava
 from reading_habits import DailyReading, DailyWordIndex, FocusSession, big_clock
 from focus_ui import choose_focus
 from saved_texts import SavedTexts, clipboard_text
+from curated_library import CuratedLibrary, select_item
 from speech import Speech
 from enrichment import Companion, MODES as COMPANION_MODES
 from terminal_focus import (TerminalFocus, FocusScreen, FOCUS_EVENT, is_focused,
@@ -1135,6 +1136,11 @@ def main(argv=None):
     imports.add_argument('--paste', action='store_true', help='coller un texte, puis Ctrl-D pour lire')
     imports.add_argument('--open', dest='saved_name', metavar='NOM', help='reprendre un texte importé par son nom')
     imports.add_argument('--library', action='store_true', help='lister les textes importés et leur progression')
+    parser.add_argument('--catalog', action='store_true', help='ouvrir le catalogue de lectures recommandées dans le terminal')
+    parser.add_argument('--download-library', action='store_true', help='télécharger les documents disponibles depuis leurs sources officielles')
+    parser.add_argument('--download-book', metavar='ID', help='télécharger un document du catalogue')
+    parser.add_argument('--attach-book', nargs=2, metavar=('ID', 'FICHIER'), help='rattacher un document local à une fiche du catalogue')
+    parser.add_argument('--open-book', metavar='ID', help='lire ou reprendre un document du catalogue')
     parser.add_argument('-n', '--name', help='nom du texte à importer (sinon demandé dans le terminal)')
     parser.add_argument('--speak', action='store_true', help='activer la voix dès l’ouverture (sinon touche t)')
     parser.add_argument('--tts', choices=('ollama', 'say'), default='ollama', help='moteur vocal, utilisé seulement à la demande')
@@ -1169,18 +1175,19 @@ def main(argv=None):
     args.size = args.size or (120 if args.mode == "words" else 15)
     importing = args.clipboard or args.paste
     saved_action = importing or args.saved_name is not None or args.library
-    if args.file and saved_action:
+    catalog_action = args.catalog or args.download_library or args.download_book is not None or args.attach_book is not None or args.open_book is not None
+    if args.file and (saved_action or catalog_action):
         parser.error('choisissez un fichier ou une action de bibliothèque')
     if args.name is not None and not importing:
         parser.error('--name nécessite --clipboard ou --paste')
-    if saved_action and (args.history or args.daily or args.prepare):
+    if (saved_action or catalog_action) and (args.history or args.daily or args.prepare):
         parser.error('la bibliothèque ne se combine pas avec --history, --daily ou --prepare')
     if args.library and (args.status or args.readings or args.new_reading or args.restart
                          or args.goal is not None or args.focus_minutes is not None):
         parser.error('--library liste les textes et s’utilise sans option de progression ou de réglage mémorisé')
     if args.new_reading and (args.restart or args.status or args.history or args.readings or args.daily):
         parser.error("--new-reading s'utilise seul avec les options de lecture")
-    if not args.file and not saved_action and not args.history and not args.daily and args.goal is None:
+    if not args.file and not saved_action and not catalog_action and not args.history and not args.daily and args.goal is None:
         parser.error("indiquez un fichier, --daily ou --history")
     if args.daily and (args.status or args.history or args.readings):
         parser.error('--daily s’utilise sans autre option de consultation')
@@ -1193,6 +1200,41 @@ def main(argv=None):
         if args.prepare:
             return prepare_document(args.file.expanduser().resolve(strict=True), args.formulas)
         memory = Memory(args.state)
+        if catalog_action:
+            catalog = CuratedLibrary(memory.db)
+            if args.catalog:
+                if sys.stdin.isatty() and sys.stdout.isatty():
+                    selected = curses.wrapper(select_item, catalog)
+                    if selected is None:
+                        return 0
+                    args.file = catalog.path(selected)
+                else:
+                    print(catalog.summary())
+                    return 0
+            elif args.download_library:
+                outcomes = catalog.download_all()
+                for item_id, path, error in outcomes:
+                    if path:
+                        print(f'Téléchargé : {catalog.item(item_id)["title"]} → {path}')
+                    else:
+                        print(f'Non téléchargé : {item_id} — {error}', file=sys.stderr)
+                return int(any(error for _, _, error in outcomes))
+            elif args.download_book:
+                path = catalog.download(args.download_book)
+                print(path)
+                return 0
+            elif args.attach_book:
+                item_id, filename = args.attach_book
+                path = catalog.attach(item_id, filename)
+                print(f'Document rattaché : {catalog.item(item_id)["title"]} → {path}')
+                return 0
+            elif args.open_book:
+                args.file = catalog.path(args.open_book)
+                if args.file is None:
+                    item = catalog.item(args.open_book)
+                    if item.get('download_url'):
+                        raise ValueError(f"Document absent ; téléchargez-le avec reader --download-book {args.open_book}.")
+                    raise ValueError(f"Document absent ; ajoutez votre fichier avec reader --attach-book {args.open_book} CHEMIN. Source : {item['url']}")
         if saved_action:
             library = SavedTexts(memory.db, args.state)
             if args.library:

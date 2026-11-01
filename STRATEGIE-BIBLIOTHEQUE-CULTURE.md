@@ -1,9 +1,9 @@
 # Stratégie — Bibliothèque de culture générale et stratégique
 
-Mis à jour le 1 novembre 2026. Ce document transforme la demande de l'utilisateur
+Mis à jour le 2 novembre 2026. Ce document transforme la demande de l'utilisateur
 en objectif, critères de sélection, première bibliographie vérifiée et plan
-d'action. **Il s'agit d'une proposition de catalogue : aucune fonction de
-bibliothèque de documents externes n'est encore implémentée.**
+d'action. Un prototype du catalogue et de l'acquisition a depuis été livré dans
+Reader ; le contenu de la sélection reste provisoire et doit être évalué.
 
 ## 1. Objectif reformulé
 
@@ -60,9 +60,9 @@ historiques et conceptuelles.
 
 | # | Document et apport | Accès vérifié | Priorité et réserve |
 | --- | --- | --- | --- |
-| 1 | Richard Haass, *The World: A Brief Introduction* — repères d'histoire, de géographie et de relations internationales. | Ouvrage commercial ; achat ou bibliothèque. [Éditeur](https://www.penguinrandomhouse.com/books/535028/the-world-by-richard-haass/) | Fondamental accessible. Point de vue principalement américain : à confronter à d'autres auteurs et régions. |
-| 2 | Peter F. Drucker, *The Effective Executive* — efficacité personnelle, priorités et décisions du dirigeant. | Ouvrage commercial ; achat ou bibliothèque. [Éditeur](https://www.routledge.com/The-Effective-Executive/Drucker/p/book/9780080549354) | Lire comme classique de management, puis en discuter les exemples et hypothèses historiques. |
-| 3 | Aswath Damodaran, *Investment Valuation*, 4e édition — valorisation, risque et finance d'entreprise. | Livre commercial à acheter/emprunter ; [site pédagogique NYU](https://pages.stern.nyu.edu/~adamodar/New_Home_Page/valuation/val.htm) offre cours et ressources ouvertes, mais ne constitue pas le texte intégral gratuit de la 4e édition. | Référence approfondie plutôt qu'une première lecture linéaire ; commencer par les chapitres de flux actualisés et coût du capital. |
+| 1 | Richard Haass, *The World: A Brief Introduction* — repères d'histoire, de géographie et de relations internationales. | Ouvrage commercial ; achat ou bibliothèque. [Éditeur](https://www.penguinrandomhouse.com/books/535028/the-world-by-richard-haass/) · [Notice Open Library](https://openlibrary.org/books/OL28243959M/The_World), qui indique « localiser en bibliothèque », pas un prêt numérique. | Fondamental accessible. Point de vue principalement américain : à confronter à d'autres auteurs et régions. |
+| 2 | Peter F. Drucker, *The Effective Executive* — efficacité personnelle, priorités et décisions du dirigeant. | Ouvrage commercial ; achat ou bibliothèque. [Éditeur et aperçu](https://www.routledge.com/The-Effective-Executive/Drucker/p/book/9780080549354) · [Notice Open Library](https://openlibrary.org/books/OL7282673M/The_Effective_Executive), aperçu de l'édition anglaise. | Lire comme classique de management, puis en discuter les exemples et hypothèses historiques. Aucune version intégrale gratuite autorisée confirmée. |
+| 3 | Julie Dahlquist, Rainford Knight et OpenStax, *Principles of Finance 2e* (2026) — états financiers, valeur temps de l'argent, risque, valorisation, investissement et financement d'entreprise. | PDF officiel gratuit sous CC BY-NC-SA 4.0, [page OpenStax](https://openstax.org/details/books/principles-finance-2e) et [préface avec licence et plan](https://openstax.org/books/principles-finance-2e/pages/preface). | Manuel universitaire récent pour bâtir les bases ; niveau introductif, en anglais, avec exemples principalement américains. |
 | 4 | FMI, *World Economic Outlook*, octobre 2026 — conjoncture, politiques, risques et scénarios macroéconomiques mondiaux. | Gratuit, [rapport officiel et téléchargements](https://www.imf.org/en/Publications/WEO/Issues/2026/10/13/world-economic-outlook-october-2026). | Commencer par résumé et chapitres de synthèse ; scénarios et projections ne sont pas des prédictions certaines. |
 | 5 | BRI, *Annual Economic Report 2026* — banques centrales, dette publique, marchés et fragilités financières. | PDF gratuit, [rapport officiel](https://www.bis.org/publ/arpdf/ar2026e.pdf). | Rapport de l'année ; conserver l'édition et sa date, puis renouveler la veille l'année suivante. |
 | 6 | AIE, *World Energy Outlook 2025* — systèmes énergétiques, sécurité, demande et scénarios. | PDF gratuit ; rapport sous CC BY 4.0, annexe A sous CC BY-NC-SA 4.0. [Page officielle](https://www.iea.org/reports/world-energy-outlook-2025). | Édition étudiée pour ce cadrage ; vérifier si l'édition 2026 est parue avant de figer l'entrée. Les scénarios ne sont pas des prévisions. |
@@ -71,12 +71,31 @@ historiques et conceptuelles.
 | 9 | Banque mondiale, *World Development Report 2026: The Promise of Artificial Intelligence* — IA, infrastructure, compétences, emploi et développement. | Rapport intégral gratuit à télécharger, [notice et PDF officiel](https://documents.worldbank.org/en/publication/documents-reports/documentdetail/099090426145520570). | Lecture importante pour relier technique, économie et société ; garder à l'esprit son angle développement et politiques publiques. |
 | 10 | Vaswani et al., *Attention Is All You Need* (2017) — article fondateur présentant l'architecture Transformer. | Texte intégral gratuit sur [arXiv](https://arxiv.org/abs/1706.03762). | Lecture technique courte mais exigeante ; prévoir un glossaire et une explication accompagnée. Ce papier historique ne décrit pas à lui seul les modèles actuels. |
 
-**À ajouter au rayon suivant :** le *Human Development Report 2025* du PNUD,
-téléchargeable gratuitement en anglais avec un aperçu français, approfondit les
-choix humains et l'IA ([source et téléchargements](https://hdr.undp.org/content/human-development-report-2025)).
-Il complète la dimension sociale du rapport Banque mondiale ; il n'est pas
-retenu dans les dix premières entrées pour éviter de surcharger la première
-vague et laisser place à finance d'entreprise, droit, énergie et management.
+**Extension intégrée au prototype :** le catalogue comporte aussi le *Human
+Development Report 2025* du PNUD, téléchargeable en anglais avec un aperçu
+français ([source et téléchargements](https://hdr.undp.org/content/human-development-report-2025)).
+Ce rapport complète la dimension humaine et sociale du rapport Banque mondiale.
+
+### État d'acquisition au 2 novembre 2026
+
+Sept documents sont téléchargés pour la bibliothèque locale : OpenStax Finance,
+BRI, GIEC, OCDE, Banque mondiale, article arXiv et PNUD. Le PDF du FMI a répondu HTTP 403 dans
+cet environnement ; sa fiche garde l'URL officielle et permet une nouvelle
+tentative. L'AIE indique qu'un compte gratuit est nécessaire pour télécharger
+le rapport complet ; Reader renvoie vers sa page sans contourner l'accès.
+Les PDF de ces six téléchargements sont dans
+`~/.local/share/reader/library/`, exclus du dépôt Git.
+
+Pour *The World*, la notice Open Library consultée permet de localiser des
+bibliothèques mais ne présentait pas de prêt numérique. Pour *The Effective
+Executive*, l'éditeur donne un aperçu et la notice Open Library de l'édition
+anglaise indique également un aperçu. La recherche n'a pas trouvé de texte
+complet libre de droits pour l'un ou l'autre. Le prototype peut rattacher vos
+copies personnelles si vous les possédez.
+
+Aswath Damodaran reste une source possible de deuxième vague pour la valorisation
+avancée ; son livre *Investment Valuation* est commercial, même si NYU met en
+ligne des cours et certaines ressources pédagogiques.
 
 Cette sélection n'est pas un classement définitif de « ce qu'un futur CEO doit
 lire ». Elle assemble des sources vérifiables et complémentaires ; le numéro
@@ -107,7 +126,7 @@ réponses ; mesurer la restitution et l'usage, pas seulement le pourcentage de
 pages parcourues. L'accompagnement LLM reste facultatif et ses réponses
 sourcées/contestables, jamais substitut à la lecture ni arbitre de vérité.
 
-### Phase 3 — Concevoir le catalogue de Reader
+### Phase 3 — Concevoir le catalogue de Reader — prototype réalisé
 
 Avant le code, définir et faire relire un manifeste de métadonnées : identifiant,
 titre, auteur/institution, domaine, type (fondamental/veille), édition/date,
@@ -119,7 +138,7 @@ Le catalogue initial peut être un manifeste versionné ; les PDFs et livres ne
 doivent pas être ajoutés au dépôt Git. Les chemins et notes privés restent en
 stockage local, avec une procédure d'export/sauvegarde documentée.
 
-### Phase 4 — Prototyper dans le terminal
+### Phase 4 — Prototyper dans le terminal — prototype réalisé
 
 Ajouter une entrée Bibliothèque au menu Tab, avec filtres par domaine, statut
 d'accès et priorité ; afficher ce qui est déjà disponible localement et la

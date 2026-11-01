@@ -1,6 +1,6 @@
 # Reader : documents enrichis, relectures et lecture ZEN
 
-## Nouvelle piste — Bibliothèque de culture générale et stratégique
+## Bibliothèque de culture générale et stratégique — prototype livré
 
 Le besoin est de proposer, depuis le menu Tab, une bibliothèque locale de
 lectures utiles à la préparation de responsabilités dirigeantes, couvrant
@@ -9,15 +9,20 @@ droit, société, management et leadership. Le catalogue initial et les sources
 ont été recherchés et structurés dans
 [STRATEGIE-BIBLIOTHEQUE-CULTURE.md](STRATEGIE-BIBLIOTHEQUE-CULTURE.md).
 
-**Statut : cadrage documentaire, aucune intégration développée.** Étapes
-proposées : (1) faire valider les dix lectures et leur ordre ; (2) définir
-langue, édition et temps de lecture réaliste ; (3) spécifier le manifeste et
-le stockage local ; (4) intégrer une option terminal Bibliothèque réutilisant
-reprise, cycles, notes et progression ; (5) évaluer rappel différé et couverture
-des domaines avant d'élargir. Les fichiers commerciaux restent acquis par
-l'utilisateur ; Reader enregistre des sources et références, pas des copies
-redistribuables. Cette piste n'annule pas les priorités précédentes de l'état
-des fonctionnalités.
+Le prototype est accessible par `./reader --catalog` et les commandes décrites
+dans le README. Le catalogue versionné recense onze lectures ; les téléchargements
+officiels accessibles, les associations de fichiers et les progressions sont
+locaux. Sept documents sont déjà présents sous `~/.local/share/reader/library/`.
+Le FMI a refusé le téléchargement depuis cet environnement et l'AIE demande un
+compte gratuit pour télécharger son rapport complet. Les deux ouvrages
+commerciaux ne sont pas récupérés ; leurs fiches acceptent vos PDF personnels.
+
+Étapes suivantes : (1) essayer le sélecteur et ouvrir quelques rapports ;
+(2) rattacher les PDF Haass/Drucker s'ils sont dans vos fichiers ; (3) évaluer
+la pertinence des dix premières lectures et leurs perspectives ; (4) compléter
+les domaines manquants et les options de langue ; (5) ajouter l'enrichissement,
+les sticky notes et les rappels différés au parcours de rétention. Cette piste
+n'annule pas les priorités précédentes de l'état des fonctionnalités.
 
 > État et priorités actualisés : [ETAT-DES-FONCTIONNALITES.md](ETAT-DES-FONCTIONNALITES.md).
 > Changements datés : [EVOLUTIONS.md](EVOLUTIONS.md). À la demande de l’utilisateur,
