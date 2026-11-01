@@ -6,7 +6,8 @@ pour le texte. Pour les PDF, installez Poppler : `brew install poppler`.
 L'aperçu visuel facultatif utilise aussi Chafa : `brew install chafa`.
 
 Suivi : [état des fonctionnalités et priorités](ETAT-DES-FONCTIONNALITES.md) ·
-[journal des évolutions](EVOLUTIONS.md).
+[journal des évolutions](EVOLUTIONS.md) ·
+[stratégie de la future bibliothèque de culture générale](STRATEGIE-BIBLIOTHEQUE-CULTURE.md).
 
 ## Lire un texte copié ou collé
 
@@ -359,6 +360,19 @@ par le suivant après environ **20 secondes** à 240 mots/minute.
 | `-m l` (`lines`) | Un passage de lignes ; 15 par défaut | Passage suivant avec `n`, ou automatiquement avec `-a` |
 | `-m w` (`words`) | Un lot de mots ; 120 par défaut | Lot suivant avec `n`, ou automatiquement avec `-a` |
 | `-m s` (`scroll`) | Une fenêtre de lignes ; 15 par défaut | Automatique dès le démarrage, une ligne à la fois |
+
+### Navigation proportionnelle
+
+Appuyez sur `1`, `2` ou `3` (panneau IA fermé) pour lire en segments de
+**1 %**, **0,1 %** ou **0,01 %** du nombre total de mots du document. Le plus
+petit segment est d'un mot ; s'il dépasse la place à l'écran, il se lit par
+plusieurs pages du terminal. `l`, comme `n` ou la flèche droite, valide le texte
+affiché et avance ; `h`, comme `b` ou la flèche gauche, revient au passage
+précédent. Ainsi les mots lus sont comptés normalement dans l'objectif
+quotidien. Les formules Markdown explicitement délimitées restent dans le même
+segment, même si une formule longue peut occuper plusieurs écrans. Les PDF sans
+structure de formule reconnue continuent de s'appuyer sur l'extraction texte et
+les références de page.
 
 Le mode `s` conserve donc du contexte à l'écran : il décale une fenêtre de texte.
 Le mode `w -a` renouvelle le passage entier et convient mieux pour isoler ce

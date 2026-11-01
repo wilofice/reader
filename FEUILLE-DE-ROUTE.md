@@ -1,9 +1,28 @@
 # Reader : documents enrichis, relectures et lecture ZEN
 
+## Nouvelle piste — Bibliothèque de culture générale et stratégique
+
+Le besoin est de proposer, depuis le menu Tab, une bibliothèque locale de
+lectures utiles à la préparation de responsabilités dirigeantes, couvrant
+culture générale/internationale, technologie, économie/finance, énergie/climat,
+droit, société, management et leadership. Le catalogue initial et les sources
+ont été recherchés et structurés dans
+[STRATEGIE-BIBLIOTHEQUE-CULTURE.md](STRATEGIE-BIBLIOTHEQUE-CULTURE.md).
+
+**Statut : cadrage documentaire, aucune intégration développée.** Étapes
+proposées : (1) faire valider les dix lectures et leur ordre ; (2) définir
+langue, édition et temps de lecture réaliste ; (3) spécifier le manifeste et
+le stockage local ; (4) intégrer une option terminal Bibliothèque réutilisant
+reprise, cycles, notes et progression ; (5) évaluer rappel différé et couverture
+des domaines avant d'élargir. Les fichiers commerciaux restent acquis par
+l'utilisateur ; Reader enregistre des sources et références, pas des copies
+redistribuables. Cette piste n'annule pas les priorités précédentes de l'état
+des fonctionnalités.
+
 > État et priorités actualisés : [ETAT-DES-FONCTIONNALITES.md](ETAT-DES-FONCTIONNALITES.md).
-> Changements datés : [EVOLUTIONS.md](EVOLUTIONS.md). Les propositions ci-dessous
-> ne sont pas toutes implémentées. Depuis le 31 octobre 2026, l'ordre retenu est :
-> textes collés nommés, voix de lecture, puis accompagnement pédagogique.
+> Changements datés : [EVOLUTIONS.md](EVOLUTIONS.md). À la demande de l’utilisateur,
+> la navigation proportionnelle précède le cadrage du dictionnaire ; l’accompagnement
+> est en cours d’évaluation et la voix a été validée.
 
 Compte rendu des demandes du 27 octobre 2026. **Première livraison : ZEN,
 cycles de lecture, références, aperçu visuel de page PDF et images Markdown locales** ; les autres fonctions restent
@@ -152,32 +171,16 @@ chronomètre imposé. Suspendre l'avance automatique lors de leur inspection et
 laisser l'utilisateur confirmer la suite. Leur durée de lecture ne se déduit
 pas correctement d'un simple nombre de mots.
 
-## 6. Avancer de 1 %, 0,1 % ou 0,01 %
+## 6. Navigation proportionnelle — premier incrément livré
 
-**Ambiguïté à résoudre :** pourcentage de document affiché par passage, saut de
-navigation, ou les deux. Cette demande n'est pas assimilée à une vitesse :
-
-| Réglage | Question à laquelle il répond |
-| --- | --- |
-| Taille d'un passage | Quelle quantité afficher à chaque étape ? |
-| Pas de navigation | De combien avancer ou reculer sur demande ? |
-| Vitesse automatique | Combien de temps laisser avant d'avancer ? |
-
-Exemple sur 100 000 mots : 1 % correspond à 1 000 mots, 0,1 % à 100 mots et
-0,01 % à 10 mots. Une fenêtre ne pouvant pas contenir un tel passage doit le
-présenter sur plusieurs écrans, sans masquer ni sauter le reste.
-
-Le texte courant pourrait utiliser un pourcentage des mots, avec minimum d'une
-unité et rapprochement d'une limite de phrase. Les objets complexes resteraient
-indivisibles. Il faut définir explicitement le dénominateur pour un document
-mêlant texte et objets ; il ne sera pas présenté comme une part du temps ou de
-la difficulté. La progression actuelle repose sur des caractères : elle ne
-doit pas être changée silencieusement.
-
-Si ces valeurs désignent des variations de vitesse, les distinguer comme une
-troisième option éventuelle. Une précision numérique de 0,01 % ne garantit
-aucune précision équivalente du rythme réel. Les formules demandent surtout
-une pause et un contrôle manuel du passage.
+`1`, `2` et `3` activent des segments correspondant à 1 %, 0,1 % et 0,01 % du
+nombre total de mots, avec un minimum d'un mot. `h` et `l` sont des raccourcis
+de passage précédent/suivant, comme `b` et `n` ou les flèches. La lecture avance
+par les passages affichés et l'objectif quotidien les compte comme d'habitude ;
+aucun texte n'est sauté par le raccourci proportionnel. Un terminal peut
+présenter un segment volumineux sur plusieurs écrans. Les formules Markdown
+délimitées restent dans le même segment ; les formules PDF sans balisage doivent
+encore être éprouvées sur des documents réels.
 
 ## 7. Colonne d'accompagnement et LLM
 

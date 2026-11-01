@@ -4,6 +4,26 @@ Ce journal commence le 31 octobre 2026. Pour les changements antérieurs,
 consulter Git ; l'état consolidé est dans
 [ETAT-DES-FONCTIONNALITES.md](ETAT-DES-FONCTIONNALITES.md).
 
+## 1 novembre 2026 — Stratégie de bibliothèque de lecture
+
+- Structuration de l'objectif : constituer une culture générale et stratégique
+  pour des responsabilités de direction, avec des rayons internationaux,
+  techniques, financiers, énergétiques, juridiques, sociaux et managériaux.
+- Recherche et première sélection de dix sources institutionnelles, académiques
+  et éditoriales ; accès gratuit, achat/emprunt, licences et limites sont
+  distingués dans [STRATEGIE-BIBLIOTHEQUE-CULTURE.md](STRATEGIE-BIBLIOTHEQUE-CULTURE.md).
+- Le document formalise les phases de validation, rétention, catalogue local,
+  prototype terminal et évaluation. La bibliothèque elle-même n'est pas
+  implémentée ; aucune œuvre n'est ajoutée ou téléchargée dans le dépôt.
+
+## 1 novembre 2026 — Navigation proportionnelle
+
+- `1`, `2` et `3` choisissent des segments de lecture de 1 %, 0,1 % ou 0,01 %
+  du nombre total de mots. `h`/`l` avancent ou reviennent comme `b`/`n` et les
+  flèches ; chaque passage affiché est compté normalement à la validation.
+- Les formules Markdown explicitement délimitées restent dans le même segment.
+  Les PDF et équations sans délimiteurs restent à évaluer sur documents réels.
+
 ## 1 novembre 2026 — Préparation Ollama avant Reader
 
 - `./install.sh --models` installe l'application Ollama officielle si nécessaire,

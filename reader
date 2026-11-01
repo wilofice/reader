@@ -34,6 +34,9 @@ from terminal_focus import (TerminalFocus, FocusScreen, FOCUS_EVENT, is_focused,
                             enable_reports, disable_reports)
 
 
+MARKED_MATH = re.compile(r"\$\$[\s\S]*?\$\$|\\\[[\s\S]*?\\\]|\\\([\s\S]*?\\\)|(?<!\\)\$(?!\$)[^$\n]+(?<!\\)\$")
+
+
 # Devise de Reader choisie par l'utilisateur, sans attribution à un auteur.
 READING_QUOTE = "Lire, c’est conquérir le monde."
 READING_REMINDER = (
@@ -445,6 +448,12 @@ def page(text, position, mode, size, width, height):
             if count == size:
                 end = position + match.end()
                 break
+        for formula in MARKED_MATH.finditer(text, position):
+            if formula.start() < end < formula.end():
+                end = formula.end()
+                break
+            if formula.start() >= end:
+                break
     limit = min(size, height) if mode in ("lines", "scroll") else height
     visible = rows(text, position, end, width, limit)
     return visible, visible[-1][1] if visible else position
@@ -526,6 +535,8 @@ def run_ui(screen, text, path, memory, args, position, changed, source=None, off
     auto = args.auto or args.mode == "scroll"
     paused = False
     speed = args.wpm
+    jump_step = 0.001  # 0,1 % du document, aligné sur la position de progression
+    proportional_mode = False
     deadline = None
     window_was_active = is_focused(screen)
     focus_delay = None
@@ -542,6 +553,8 @@ def run_ui(screen, text, path, memory, args, position, changed, source=None, off
         "Raccourcis de lecture", "",
         "n / Entrée / → / Page suiv.    Passage suivant",
         "b / ← / Page préc.            Passage précédent, puis pause",
+        "h / l             Passage précédent / suivant, comme les flèches",
+        "1 / 2 / 3         Passages proportionnels : 1 % / 0,1 % / 0,01 %",
         "Espace / p / P    Pause / reprise, dans tous les modes",
         "t / T             Activer / arrêter la voix",
         "e                 Ouvrir / fermer l'accompagnement IA",
@@ -657,8 +670,11 @@ def run_ui(screen, text, path, memory, args, position, changed, source=None, off
                 if last_layout is not None:
                     clock.reset_passage()
                 last_layout = layout
-            visible, end = page(text, position, args.mode, args.size, body_width, body_height)
-            step = visible[0][1] if args.mode == "scroll" and visible else end
+            proportional_words = max(1, round(len(words_index.starts) * jump_step))
+            display_mode = "words" if proportional_mode else args.mode
+            display_size = proportional_words if proportional_mode else args.size
+            visible, end = page(text, position, display_mode, display_size, body_width, body_height)
+            step = visible[0][1] if display_mode == "scroll" and visible else end
             done = position >= len(text)
             current_panel_passage = (position, step)
             if current_panel_passage != panel_passage:
@@ -728,7 +744,7 @@ def run_ui(screen, text, path, memory, args, position, changed, source=None, off
             if sum(map(cell_width, path.name)) > name_width and name_width:
                 title = clipped(path.name, name_width - 1) + '…'
             put(0, title + total_words_label, curses.A_BOLD, x=2)
-            mode_label = {"lines": "Lignes", "words": "Mots", "scroll": "Défilement"}[args.mode]
+            mode_label = "Proportionnel" if proportional_mode else {"lines": "Lignes", "words": "Mots", "scroll": "Défilement"}[args.mode]
             reading_state = "Lecture terminée" if done else "En pause · aide" if help_open else "En pause" if paused else "Lecture automatique" if auto else "Lecture manuelle"
             if not window_active:
                 reading_state = 'Pause · fenêtre inactive'
@@ -747,11 +763,12 @@ def run_ui(screen, text, path, memory, args, position, changed, source=None, off
             elif voice_error:
                 metadata = 'Voix indisponible · i : détails et commande de réparation'
             put(1, metadata, accent, x=2)
-            unit = "mots" if args.mode == "words" else "lignes"
+            unit = "mots" if proportional_mode or args.mode == "words" else "lignes"
             if spacious:
-                setting = f"Passage : {args.size} {unit}"
+                setting = (f"Passage : ≈{proportional_words} mots · {jump_step * 100:g}%"
+                           if proportional_mode else f"Passage : {args.size} {unit}")
                 setting += f" · Lecture {cycle_number}"
-                hint = "    j réduire · k augmenter"
+                hint = "    h retour · l suivant" if proportional_mode else "    j réduire · k augmenter"
                 if width >= 65:
                     setting += hint
                 put(2, setting, x=2)
@@ -803,7 +820,7 @@ def run_ui(screen, text, path, memory, args, position, changed, source=None, off
                         put(body_start + 1, "g / b : revoir dans ce cycle", x=body_left, chrome=False)
             if page_starts and not help_open:
                 unavailable = any(item.get("error") or item.get('formula_error') for item in visual_pages)
-                page_status = f"Page(s) PDF {page_label}/{len(page_starts)} · v image · i référence"
+                page_status = f"Page(s) PDF {page_label}/{len(page_starts)} · v image · i référence · h/l passage"
                 if visual_pending:
                     page_status += " · analyse…"
                 elif unavailable:
@@ -846,7 +863,8 @@ def run_ui(screen, text, path, memory, args, position, changed, source=None, off
                 footer = "Lecture suspendue pendant l'aide"
             else:
                 if not page_starts:
-                    put(height - 2, notice or "n suite · b retour · espace pause/reprise", curses.A_DIM)
+                    put(height - 2, notice or "n/l passage suivant · b/h précédent · 1/2/3 : taille proportionnelle",
+                        curses.A_DIM)
                 footer = ('f focus · p pause · z ZEN · i référence · ? aide · q quitter' if width >= 80
                           else 'f focus · ? aide · q quitter' if width >= 60 else 'f focus · q quitter')
             now = time.monotonic()
@@ -963,6 +981,15 @@ def run_ui(screen, text, path, memory, args, position, changed, source=None, off
                 zen = not zen
                 deadline = None
                 continue
+            if key in (ord("1"), ord("2"), ord("3")):
+                jump_step = {ord("1"): 0.01, ord("2"): 0.001, ord("3"): 0.0001}[key]
+                proportional_mode = True
+                proportional_words = max(1, round(len(words_index.starts) * jump_step))
+                clock.reset_passage()
+                deadline = None
+                notice = (f"Passages de {jump_step * 100:g}% · environ {proportional_words} mots. "
+                          "l valide la suite · h revient au passage précédent.")
+                continue
             if key == ord('f'):
                 if speech:
                     speech.pause()
@@ -1006,7 +1033,7 @@ def run_ui(screen, text, path, memory, args, position, changed, source=None, off
                 elif speech:
                     speech.stop()
                 clock.reset_passage()
-            elif key in (ord("n"), curses.KEY_RIGHT, curses.KEY_DOWN, curses.KEY_NPAGE, 10, 13):
+            elif key in (ord("n"), ord("l"), curses.KEY_RIGHT, curses.KEY_DOWN, curses.KEY_NPAGE, 10, 13):
                 advance = True
             elif key in (ord(' '), ord('p'), ord('P')):
                 paused, deadline = not paused, None
@@ -1024,13 +1051,16 @@ def run_ui(screen, text, path, memory, args, position, changed, source=None, off
                     speed = max(10, min(3000, speed + (-25 if key == ord("-") else 25)))
                 deadline = None
             elif key in (ord("j"), ord("k"), ord("["), ord("]")):
+                if proportional_mode:
+                    proportional_mode = False
+                size_unit = "mots" if args.mode == "words" else "lignes"
                 amount = 10 if args.mode == "words" else 1
                 args.size = max(1, args.size + (amount if key in (ord("k"), ord("]")) else -amount))
                 clock.reset_passage()
                 deadline = None
-                notice = f"Passage : {args.size} {unit} (limité à la fenêtre)."
-            elif key in (ord("b"), curses.KEY_LEFT, curses.KEY_UP, curses.KEY_PPAGE):
-                position = stack.pop() if stack else previous(text, position, args.mode, args.size, body_width, body_height)
+                notice = f"Passage : {args.size} {size_unit} (limité à la fenêtre)."
+            elif key in (ord("b"), ord("h"), curses.KEY_LEFT, curses.KEY_UP, curses.KEY_PPAGE):
+                position = stack.pop() if stack else previous(text, position, display_mode, display_size, body_width, body_height)
                 clock.reset_passage()
                 paused = paused or auto or voice_enabled
                 auto, deadline = False, None

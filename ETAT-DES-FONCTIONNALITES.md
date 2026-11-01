@@ -1,9 +1,14 @@
 # État des fonctionnalités de Reader
 
-Mis à jour le 31 octobre 2026. Ce document décrit l'état livré et l'ordre de
+Mis à jour le 1 novembre 2026. Ce document décrit l'état livré et l'ordre de
 travail actuel ; [EVOLUTIONS.md](EVOLUTIONS.md) conserve les changements datés.
 La [feuille de route](FEUILLE-DE-ROUTE.md) détaille les pistes de conception,
 dont certaines ne sont pas encore réalisées.
+
+La bibliothèque stratégique est **au stade de la recherche et de la stratégie** ;
+elle n'est pas encore une fonction de Reader. Le [plan dédié](STRATEGIE-BIBLIOTHEQUE-CULTURE.md)
+documente les domaines, dix sources initiales vérifiées, les conditions d'accès
+et les phases proposées. La liste doit être validée avant tout développement.
 
 ## Disponible
 
@@ -19,28 +24,32 @@ dont certaines ne sont pas encore réalisées.
 | Temps et focus | Temps actif, estimation restante, chrono/minuteur sur demande, minimum et défaut de cinq minutes. |
 | Objectif quotidien | Mots validés sauvegardés par date ; objectif de 15 000 mots par défaut. Pas encore de tableau de bord historique. |
 | Télécommande | Navigation par Page suivante/précédente, en plus des flèches. |
+| Navigation proportionnelle | `1`/`2`/`3` activent des segments de 1 %/0,1 %/0,01 % du nombre de mots. `h`/`l` sont des alias des commandes de passage précédent/suivant ; la progression quotidienne reste comptée normalement. |
 | Bibliothèque de textes collés | Import nommé, conservation du texte, liste et reprise par le nom. |
-| Voix — prototype | Ollama/Phonon ou macOS `say`, pause/reprise, progression à la fin de l'audio. `./install.sh --models` précharge Phonon français avant l'ouverture ; téléchargement à la demande disponible en secours. Chaîne Phonon réelle testée à volume nul ; qualité à l'écoute à évaluer. macOS utilise `afplay` au tempo normal, FFplay pour les autres tempos. |
-| Accompagnement — prototype local | Panneau à la demande, contexte/question/indice/résumé/QCM, cache et citations contrôlées. `./install.sh --models` précharge `granite4:latest` ; téléchargement à la demande disponible en secours. Qualité d'un modèle réel encore à évaluer. |
+| Voix — prototype validé par l’utilisateur | Ollama/Phonon ou macOS `say`, pause/reprise, progression à la fin de l'audio. `./install.sh --models` précharge Phonon français avant l'ouverture ; téléchargement à la demande disponible en secours. L’utilisateur a testé et validé ; confort d’écoute prolongée et reprise fine restent à évaluer. |
+| Accompagnement — prototype local en évaluation | Panneau à la demande, contexte/question/indice/résumé/QCM, cache et citations contrôlées. `./install.sh --models` précharge `granite4:latest` ; l’utilisateur évalue la qualité des résultats. |
 
 ## Priorités confirmées
 
-1. **Textes collés** : première version implémentée ; à essayer sur l'autre Mac.
-2. **Voix de lecture** : premier prototype implémenté et chaîne technique Phonon
-   vérifiée avec Ollama 0.40.13. Restent comparaison avec Kokoro, confort d'écoute
-   prolongée et reprise plus fine. La voix macOS est disponible.
-3. **Accompagnement pédagogique** : premier prototype Ollama implémenté ;
-   évaluer les réponses d'un vrai modèle, puis fournir un adaptateur payant,
-   des références externes vérifiables et un suivi des exercices.
-4. **Dictionnaire** : sélectionner un mot ou une expression, définition sourcée
-   et vocabulaire personnel. Toujours souhaité, mais passe après voix et panneau.
-5. **Statistiques** : historique quotidien, semaines/mois, régularité. Les
+1. **Textes collés** : bibliothèque nommée implémentée ; bibliothèque et mémoire
+   restent propres à chaque machine.
+2. **Voix de lecture** : l’utilisateur a testé et validé le prototype. Restent
+   comparaison avec Kokoro, confort d'écoute prolongée et reprise plus fine.
+3. **Accompagnement pédagogique** : prototype disponible ; l’utilisateur évalue
+   encore la qualité. Ensuite : sources vérifiables, adaptateur payant éventuel
+   et suivi des exercices.
+4. **Navigation proportionnelle** : segments de lecture proportionnels livrés
+   avant le dictionnaire. Restent les essais sur PDF et formules extraites sans
+   délimiteurs explicites.
+5. **Dictionnaire** : prochain chantier à cadrer avant codage : sélection au
+   clavier, définitions sourcées et vocabulaire personnel local.
+6. **Statistiques** : historique quotidien, semaines/mois, régularité. Les
    totaux journaliers existent déjà ; leur présentation reste à développer.
-6. **Documents complexes** : davantage de tests, tableaux, scans, ordre de
-   lecture multicolonne. L'accès à la page originale reste la référence.
-7. **Navigation proportionnelle** : pas de 1 %, 0,1 % ou 0,01 % à concevoir.
-   **Non implémentée** : afficher le pourcentage actuel n'est pas proposer un
-   saut ou une taille de passage en pourcentage.
+7. **Documents complexes** : davantage de tests sur tableaux, scans et lecture
+   multicolonne. L'accès à la page originale reste la référence.
+8. **Bibliothèque stratégique** : sources et stratégie documentées ; prochaine
+   étape, valider le catalogue initial, distinguer fondamentaux et veille, puis
+   définir le manifeste local avant d'ajouter une option Bibliothèque au menu.
 
 ## Règle de suivi
 
