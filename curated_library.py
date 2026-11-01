@@ -136,6 +136,10 @@ class CuratedLibrary:
 
 
 def select_item(screen, library):
+    # Decode terminal escape sequences (arrows, Home/End) as curses keys.
+    # Explicit setup matters for terminals and test harnesses that do not enter
+    # keypad mode through curses.wrapper themselves.
+    screen.keypad(True)
     index = 0
     notice = '↑/↓ naviguer · Entrée ouvrir · d télécharger · a rattacher · q quitter'
     while True:
@@ -164,16 +168,21 @@ def select_item(screen, library):
             if len(title) > title_width:
                 title = title[:max(1, title_width - 1)] + '…'
             text = f"{absolute_index + 1:2}. {title:<{title_width}} {status}"
-            put(screen_row, text, 1 if absolute_index == index else 0)
+            selected = curses.A_REVERSE | curses.A_BOLD if absolute_index == index else 0
+            put(screen_row, text, selected)
         put(height - 2, notice or '↑/↓ naviguer · Entrée ouvrir · d télécharger · a rattacher · q quitter')
         screen.refresh()
-        key = screen.getch()
+        key = read_catalog_key(screen)
         if key in (ord('q'), 27):
             return None
         if key in (curses.KEY_UP, ord('k')):
             index = max(0, index - 1)
         elif key in (curses.KEY_DOWN, ord('j')):
             index = min(len(rows) - 1, index + 1)
+        elif key == curses.KEY_HOME:
+            index = 0
+        elif key == curses.KEY_END:
+            index = len(rows) - 1
         elif key in (10, 13, curses.KEY_ENTER):
             item, path, _, _ = rows[index]
             if path:
@@ -211,3 +220,37 @@ def select_item(screen, library):
                     notice = str(error)
             else:
                 notice = f"Aucun fichier sélectionné. Sinon : ./reader --attach-book {item['id']} CHEMIN"
+
+
+def read_catalog_key(screen):
+    """Read arrows decoded by curses or sent as common raw escape sequences."""
+    key = screen.getch()
+    if key != 27:
+        return key
+
+    # Terminal.app and presentation devices may keep sending CSI arrows even
+    # after curses enabled application keypad mode. Wait briefly to distinguish
+    # a sequence from a deliberate Escape used to close the catalogue.
+    screen.timeout(50)
+    try:
+        second = screen.getch()
+        if second not in (ord('['), ord('O')):
+            return 27
+        sequence = []
+        for _ in range(8):
+            part = screen.getch()
+            if part == -1:
+                break
+            sequence.append(part)
+            if part in (ord('A'), ord('B'), ord('H'), ord('F')):
+                break
+        if not sequence:
+            return 27
+        return {
+            ord('A'): curses.KEY_UP,
+            ord('B'): curses.KEY_DOWN,
+            ord('H'): curses.KEY_HOME,
+            ord('F'): curses.KEY_END,
+        }.get(sequence[-1], 27)
+    finally:
+        screen.timeout(-1)

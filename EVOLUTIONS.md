@@ -6,6 +6,14 @@ consulter Git ; l'état consolidé est dans
 
 ## 2 novembre 2026 — Prototype de bibliothèque de lecture
 
+- Correction de la navigation du catalogue : activation explicite des touches
+  spéciales, prise en charge des deux séquences terminal courantes pour les
+  flèches, et surlignage visible de la ligne active. Vérification réelle dans
+  un pseudo-terminal : quatre flèches bas puis Entrée ouvrent le rapport BRI.
+  Les touches `j`/`k`, Début et Fin restent aussi disponibles.
+- Validation automatisée après correction : 120 tests réussis, dont quatre
+  tests propres au sélecteur de bibliothèque ; sept tests facultatifs ignorés
+  faute des dépendances OpenCV/PyMuPDF de leurs environnements dédiés.
 - Ajout d'un catalogue terminal de onze lectures, avec progression par édition,
   liens d'acquisition, statut d'accès et téléchargement depuis des URL PDF
   officielles. `./reader --catalog` liste ou ouvre le sélecteur interactif ;
