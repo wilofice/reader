@@ -70,12 +70,12 @@ ollama --version
 ./reader "document.pdf" -m w -s 80 --tts ollama --speech-model phonon:40m-fr --speak
 ```
 
-Ollama doit être installé et démarré. **Au premier `t` ou `T`, Reader télécharge
-automatiquement Phonon s'il manque**, puis prépare le passage. Le panneau
-pédagogique fait de même pour son modèle texte. Le téléchargement s'effectue
-sur le serveur configuré par `--ollama-url`; son avancement apparaît dans
-l'interface. Il faut une connexion Internet et assez d'espace disque la
-première fois sur chaque serveur. Les modèles ne sont pas inclus dans Git.
+Pour préparer les modèles **avant d'ouvrir Reader**, lancez `./install.sh --models`.
+Cette étape installe et démarre Ollama si nécessaire, puis précharge
+`granite4:latest` et, sur Apple Silicon, `phonon:40m-fr`. Reader peut aussi
+télécharger à la demande un modèle absent, par exemple pour l'anglais. Il faut
+une connexion Internet et assez d'espace disque durant la préparation. Les
+modèles ne sont pas inclus dans Git.
 Pour l'anglais, choisissez `--speech-model phonon:31m-en`; il sera téléchargé
 à sa première utilisation.
 `--voice default` utilise la voix du modèle ; `ollama show NOM_DU_MODELE`
@@ -162,10 +162,11 @@ des documents variés reste à évaluer. Aucun service payant n'est appelé.
 
 ## Installer sur un autre Mac
 
-Depuis le dépôt cloné, installez les dépendances avec une seule commande :
+Depuis le dépôt cloné, installez les dépendances puis préparez Ollama et ses modèles :
 
 ```sh
 ./install.sh
+./install.sh --models
 ```
 
 Le script vérifie Python **3.10+** avec `curses` et SQLite, Poppler (`pdftotext`,
@@ -187,7 +188,12 @@ ni les documents, ni la progression. S'il trouve ou installe Homebrew hors de
 votre `PATH`, il affiche une ligne `export PATH=...` à exécuter dans ce terminal.
 Suivez les indications de Homebrew pour rendre ce réglage permanent si besoin.
 Les dépendances indirectes installées ou mises à jour sont gérées par Homebrew.
-iTerm2, GitHub CLI et les modèles LLM ne font pas partie des dépendances installées.
+iTerm2 et GitHub CLI restent facultatifs. `./install.sh --models` installe
+l'application Ollama officielle par Homebrew, démarre son serveur local et
+télécharge le modèle pédagogique et la voix française avant le lancement de
+Reader. Les téléchargements peuvent prendre du temps et utiliser plusieurs Go.
+L'installation automatique de l'application Ollama requiert macOS 14 ou plus
+récent ; si Ollama est déjà installé, le script réutilise son exécutable.
 
 ### Premier clonage
 
@@ -200,6 +206,7 @@ gh repo clone wilofice/reader
 cd reader
 git switch main
 ./install.sh
+./install.sh --models
 ./reader README.md
 ```
 

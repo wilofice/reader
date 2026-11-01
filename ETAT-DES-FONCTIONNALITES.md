@@ -20,8 +20,8 @@ dont certaines ne sont pas encore réalisées.
 | Objectif quotidien | Mots validés sauvegardés par date ; objectif de 15 000 mots par défaut. Pas encore de tableau de bord historique. |
 | Télécommande | Navigation par Page suivante/précédente, en plus des flèches. |
 | Bibliothèque de textes collés | Import nommé, conservation du texte, liste et reprise par le nom. |
-| Voix — prototype | Ollama/Phonon ou macOS `say`, pause/reprise, progression à la fin de l'audio. Phonon absent est téléchargé à la première utilisation. Chaîne Phonon réelle testée à volume nul ; qualité à l'écoute à évaluer. macOS utilise `afplay` au tempo normal, FFplay pour les autres tempos. |
-| Accompagnement — prototype local | Panneau à la demande, contexte/question/indice/résumé/QCM, cache et citations contrôlées. `granite4:latest` par défaut est téléchargé à la première demande ; qualité d'un modèle réel encore à évaluer. |
+| Voix — prototype | Ollama/Phonon ou macOS `say`, pause/reprise, progression à la fin de l'audio. `./install.sh --models` précharge Phonon français avant l'ouverture ; téléchargement à la demande disponible en secours. Chaîne Phonon réelle testée à volume nul ; qualité à l'écoute à évaluer. macOS utilise `afplay` au tempo normal, FFplay pour les autres tempos. |
+| Accompagnement — prototype local | Panneau à la demande, contexte/question/indice/résumé/QCM, cache et citations contrôlées. `./install.sh --models` précharge `granite4:latest` ; téléchargement à la demande disponible en secours. Qualité d'un modèle réel encore à évaluer. |
 
 ## Priorités confirmées
 

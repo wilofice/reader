@@ -3,6 +3,7 @@
 set -euo pipefail
 
 check_only=0
+install_models=0
 case "${1:-}" in
     --layout)
         if [ "$#" -gt 1 ]; then printf '%s\n' 'Une seule option est acceptée.' >&2; exit 2; fi
@@ -10,11 +11,13 @@ case "${1:-}" in
         exec /bin/bash "$(dirname "$0")/install-layout.sh"
         ;;
     --check) check_only=1 ;;
+    --models) install_models=1 ;;
     -h|--help)
-        printf '%s\n' 'Usage : ./install.sh [--check | --layout]' \
+        printf '%s\n' 'Usage : ./install.sh [--check | --layout | --models]' \
             'Installe les dépendances macOS manquantes : Python 3.10+, Poppler, Chafa.' \
             '--check : vérifier seulement, sans installation ni accès réseau.' \
-            '--layout : installer aussi le modèle local de repérage des formules.'
+            '--layout : installer aussi le modèle local de repérage des formules.' \
+            '--models : installer/démarrer Ollama et précharger les modèles Reader avant son lancement.'
         exit 0 ;;
     '') ;;
     *) printf 'Option inconnue : %s\n' "$1" >&2; exit 2 ;;
@@ -60,7 +63,7 @@ if [ "$check_only" -eq 1 ]; then
     report
     exit 0
 fi
-if python_ready && poppler_ready && chafa_ready; then
+if python_ready && poppler_ready && chafa_ready && [ "$install_models" -eq 0 ]; then
     report
     printf '%s\n' 'Tout est prêt ; aucune installation nécessaire.' './reader README.md'
     exit 0
@@ -101,7 +104,49 @@ if ! report; then
     printf '%s\n' "Des dépendances restent indisponibles. Vérifiez les erreurs Homebrew ci-dessus et l'ordre de votre PATH." >&2
     exit 1
 fi
+if [ "$install_models" -eq 1 ]; then
+    if ! command -v ollama >/dev/null 2>&1; then
+        if [ -x /Applications/Ollama.app/Contents/Resources/ollama ]; then
+            PATH="/Applications/Ollama.app/Contents/Resources:$PATH"
+            export PATH
+        else
+            printf '%s\n' 'Installation de l’application Ollama avec Homebrew.'
+            "$brew_bin" install --cask ollama-app
+        fi
+    fi
+    if ! curl -fsS http://127.0.0.1:11434/api/version >/dev/null 2>&1; then
+        if [ -d /Applications/Ollama.app ]; then
+            open -a Ollama
+        else
+            printf '%s\n' 'Démarrage du serveur Ollama.'
+            nohup ollama serve >/dev/null 2>&1 </dev/null &
+        fi
+    fi
+    ollama_ready=0
+    for attempt in {1..90}; do
+        if curl -fsS http://127.0.0.1:11434/api/version >/dev/null 2>&1; then
+            ollama_ready=1
+            break
+        fi
+        sleep 2
+    done
+    if [ "$ollama_ready" -ne 1 ]; then
+        printf '%s\n' 'Le serveur Ollama ne répond pas sur 127.0.0.1:11434. Ouvrez Ollama puis relancez ./install.sh --models.' >&2
+        exit 1
+    fi
+    printf '%s\n' 'Téléchargement du modèle du panneau pédagogique : granite4:latest'
+    OLLAMA_HOST=127.0.0.1:11434 ollama pull granite4:latest
+    if [ "$(uname -m)" = arm64 ]; then
+        printf '%s\n' 'Téléchargement du modèle vocal français : phonon:40m-fr'
+        OLLAMA_HOST=127.0.0.1:11434 ollama pull phonon:40m-fr
+    else
+        printf '%s\n' 'Phonon nécessite Apple Silicon ; la voix macOS « say » reste disponible.'
+    fi
+    printf '\n%s\n' 'Ollama et les modèles Reader sont prêts. Lancez : ./reader README.md'
+    exit 0
+fi
 printf '\n%s\n' 'Installation terminée. Si Homebrew était absent du PATH de votre terminal, exécutez :'
 printf 'export PATH="%s/bin:%s/sbin:$PATH"\n' "$brew_prefix" "$brew_prefix"
-printf '\n%s\n' 'Puis lancez : ./reader README.md' \
+printf '\n%s\n' 'Puis lancez ./install.sh --models avant Reader pour installer Ollama et précharger les modèles.' \
+    'Ensuite : ./reader README.md' \
     'iTerm2 est facultatif ; Terminal.app utilise Quick Look automatiquement.'

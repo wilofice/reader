@@ -4,6 +4,17 @@ Ce journal commence le 31 octobre 2026. Pour les changements antérieurs,
 consulter Git ; l'état consolidé est dans
 [ETAT-DES-FONCTIONNALITES.md](ETAT-DES-FONCTIONNALITES.md).
 
+## 1 novembre 2026 — Préparation Ollama avant Reader
+
+- `./install.sh --models` installe l'application Ollama officielle si nécessaire,
+  démarre le serveur et télécharge à l'avance le modèle texte `granite4:latest`
+  ainsi que la voix française `phonon:40m-fr` sur Apple Silicon. La commande
+  affiche la progression `ollama pull`; elle convient avant le premier lancement
+  de Reader. L'installation à la demande dans Reader reste comme solution de
+  secours pour un modèle choisi plus tard.
+- Sur Mac Intel, le modèle texte est préchargé ; Phonon est omis et la voix
+  macOS `say` reste disponible.
+
 ## 31 octobre 2026
 
 - Suivi : création d'un état consolidé et de ce journal ; priorité donnée à la
