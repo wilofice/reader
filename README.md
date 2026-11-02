@@ -486,7 +486,7 @@ Toutes les anciennes formes restent acceptées. Par exemple,
 | `-e` | `--encoding` | Encodage du texte |
 | `-R` | `--raw` | Source Markdown |
 | `-S` | `--state` | Chemin de la base |
-| `-H` | `--history` | Historique |
+| `-H` | `--history` | Sélectionner un document de l'historique |
 | `-p` | `--status` | Progression en JSON |
 | `-h` | `--help` | Aide |
 | `-z` | `--zen` | Démarrer en lecture épurée |
@@ -942,6 +942,13 @@ le lecteur attend son délai de lecture avant de terminer.
 ./reader "notes.txt" --state "/chemin/memoire.sqlite3"
 ./reader "ancien.txt" --encoding latin-1
 ```
+
+Dans un terminal, `reader -H` ouvre un sélecteur trié par dernière consultation :
+utilisez `↑`/`↓` (ou `j`/`k`), puis Entrée pour reprendre le document choisi à
+sa position mémorisée. Le chemin complet, la progression et le temps de lecture
+sont affichés. Un fichier déplacé ou supprimé porte le symbole `⚠` et ne peut
+pas être ouvert. Dans un script ou avec une redirection, `--history` conserve sa
+sortie texte afin de rester exploitable en ligne de commande.
 
 La mémoire identifie les documents par leur chemin absolu. Un fichier déplacé
 est considéré comme nouveau ; un contenu modifié reprend au début pour éviter

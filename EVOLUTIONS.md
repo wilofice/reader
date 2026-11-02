@@ -6,6 +6,12 @@ consulter Git ; l'état consolidé est dans
 
 ## 2 novembre 2026 — Prototype de bibliothèque de lecture
 
+- Reprise depuis l'historique : `reader -H` devient un sélecteur interactif de
+  tous les documents mémorisés, classés par consultation récente. Entrée reprend
+  le document choisi ; les chemins absents sont signalés. Hors terminal, la
+  sortie textuelle historique est conservée pour les scripts. Les horodatages
+  ont désormais une précision à la milliseconde pour stabiliser ce classement.
+  Validation complète : 125 tests réussis, sept tests visuels facultatifs ignorés.
 - Interface de lecture : les rappels personnels longs sont désormais masqués
   par défaut. Seule la devise « Lire, c’est conquérir le monde. » reste visible
   dans l'en-tête lorsque l'espace le permet. La suite complète valide ce rendu

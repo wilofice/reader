@@ -27,7 +27,7 @@ from formula_index import FormulaIndex, EnrichedIndex, available as formulas_ava
 from reading_habits import DailyReading, DailyWordIndex, FocusSession, big_clock
 from focus_ui import choose_focus
 from saved_texts import SavedTexts, clipboard_text
-from curated_library import CuratedLibrary, select_item, speech_model_for_language
+from curated_library import CuratedLibrary, read_catalog_key, select_item, speech_model_for_language
 from speech import Speech
 from enrichment import Companion, MODES as COMPANION_MODES
 from terminal_focus import (TerminalFocus, FocusScreen, FOCUS_EVENT, is_focused,
@@ -124,7 +124,7 @@ class Memory:
                     VALUES (?, ?, 1, CASE WHEN ? THEN NULL ELSE datetime('now') END, ?, ?, ?)""",
                     (str(path), digest, historical, historical, historical, base))
             self.db.execute("""INSERT INTO documents (path, digest, position, length, updated)
-                VALUES (?, ?, ?, ?, datetime('now'))
+                VALUES (?, ?, ?, ?, strftime('%Y-%m-%d %H:%M:%f', 'now'))
                 ON CONFLICT(path) DO UPDATE SET digest=excluded.digest,
                 position=excluded.position, length=excluded.length, updated=excluded.updated""",
                 (str(path), digest, position, len(text)))
@@ -140,7 +140,8 @@ class Memory:
                 (total, position >= len(text), position >= len(text), str(path), digest, str(path), digest))
 
     def history(self):
-        return self.db.execute("SELECT path, position, length, updated, reading_seconds FROM documents ORDER BY updated DESC").fetchall()
+        return self.db.execute("""SELECT path, position, length, updated, reading_seconds
+            FROM documents ORDER BY updated DESC, rowid DESC""").fetchall()
 
     def close(self):
         self.db.close()
@@ -455,6 +456,72 @@ def clipped(text, width):
         result.append(char)
         cells += advance
     return "".join(result)
+
+
+def select_history(screen, entries):
+    """Choose a remembered document, newest first, without retyping its path."""
+    screen.keypad(True)
+    index = 0
+    notice = '↑/↓ choisir · Entrée reprendre · q quitter'
+    while True:
+        screen.erase()
+        height, width = screen.getmaxyx()
+
+        def put(y, value, attr=0):
+            if 0 <= y < height:
+                try:
+                    screen.addnstr(y, 2, value, max(0, width - 4), attr)
+                except curses.error:
+                    pass
+
+        put(0, 'HISTORIQUE DES DOCUMENTS', curses.A_BOLD)
+        put(1, 'Du plus récemment consulté au plus ancien')
+        if not entries:
+            put(3, 'Aucun document mémorisé.')
+            put(height - 2, 'q / Échap : quitter')
+            screen.refresh()
+            if read_catalog_key(screen) in (ord('q'), 27, 10, 13, curses.KEY_ENTER):
+                return None
+            continue
+
+        visible_count = max(1, height - 7)
+        start = min(max(0, index - visible_count + 1), max(0, len(entries) - visible_count))
+        for row_index, (raw_path, position, length, _updated, seconds) in enumerate(
+                entries[start:start + visible_count]):
+            absolute_index = start + row_index
+            path = Path(raw_path)
+            progress = f'{position / max(1, length):5.1%}'
+            reading_time = duration(seconds)
+            suffix = f'{progress} · {reading_time}'
+            title_width = max(8, width - 10 - len(suffix))
+            title = clipped(path.name, title_width)
+            if title != path.name and title_width:
+                title = clipped(title, max(1, title_width - 1)) + '…'
+            missing = ' ⚠' if not path.is_file() else ''
+            line = f'{absolute_index + 1:2}. {title:<{title_width}} {suffix}{missing}'
+            selected = curses.A_REVERSE | curses.A_BOLD if absolute_index == index else 0
+            put(row_index + 3, line, selected)
+
+        selected_path, _, _, updated, _ = entries[index]
+        put(height - 3, f'{updated} UTC · {selected_path}', curses.A_DIM)
+        put(height - 2, notice)
+        screen.refresh()
+        key = read_catalog_key(screen)
+        if key in (ord('q'), 27):
+            return None
+        if key in (curses.KEY_UP, ord('k')):
+            index = max(0, index - 1)
+        elif key in (curses.KEY_DOWN, ord('j')):
+            index = min(len(entries) - 1, index + 1)
+        elif key == curses.KEY_HOME:
+            index = 0
+        elif key == curses.KEY_END:
+            index = len(entries) - 1
+        elif key in (10, 13, curses.KEY_ENTER):
+            path = Path(entries[index][0]).expanduser()
+            if path.is_file():
+                return path
+            notice = 'Fichier introuvable : déplacez la sélection ou appuyez sur q.'
 
 
 def terminal_accent():
@@ -1138,7 +1205,7 @@ def main(argv=None):
     parser.add_argument("-e", "--encoding", default="utf-8-sig", help="encodage du texte (défaut : UTF-8)")
     parser.add_argument("-R", "--raw", action="store_true", help="afficher le code source des fichiers Markdown au lieu de l'aperçu")
     parser.add_argument("-S", "--state", type=Path, default=state_path(), help="chemin de la base SQLite")
-    parser.add_argument("-H", "--history", action="store_true", help="afficher les lectures mémorisées")
+    parser.add_argument("-H", "--history", action="store_true", help="choisir ou afficher les lectures mémorisées")
     parser.add_argument("-p", "--status", action="store_true", help="afficher la position du fichier en JSON")
     args = parser.parse_args(argv)
     args.mode = {"l": "lines", "w": "words", "s": "scroll"}.get(args.mode, args.mode)
@@ -1244,9 +1311,17 @@ def main(argv=None):
             print(f'{memory.daily.words()}/{memory.daily.goal} mots · {memory.daily.day} (jour local)')
             return 0
         if args.history:
-            for path, position, length, updated, seconds in memory.history():
-                print(f"{position / max(1, length):6.1%}  lu {duration(seconds)}  {updated} UTC  {path}")
-            return 0
+            history = memory.history()
+            if sys.stdin.isatty() and sys.stdout.isatty():
+                selected = curses.wrapper(select_history, history)
+                if selected is None:
+                    return 0
+                args.file = selected
+                args.history = False
+            else:
+                for path, position, length, updated, seconds in history:
+                    print(f"{position / max(1, length):6.1%}  lu {duration(seconds)}  {updated} UTC  {path}")
+                return 0
         path = args.file.expanduser().resolve(strict=True)
         args.speech_model = args.speech_model or 'phonon:40m-fr'
         source, page_starts = load_document(path, args.encoding, with_pages=True)

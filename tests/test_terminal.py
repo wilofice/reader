@@ -241,6 +241,27 @@ class TerminalTests(unittest.TestCase):
             self.assertNotIn("Généreux".encode(), output)
             self.assertNotIn(b"sticky note", output)
 
+    def test_history_picker_reopens_most_recent_document(self):
+        with tempfile.TemporaryDirectory() as directory:
+            folder = Path(directory)
+            first = folder / "premier.txt"
+            second = folder / "second.txt"
+            first.write_text("Contenu du premier document.\n" * 10)
+            second.write_text("Contenu distinct du second document.\n" * 10)
+            state = str(folder / "state.sqlite3")
+            self.session([str(first), "-S", state], [(0.2, b"q")])
+            self.session([str(second), "-S", state], [(0.2, b"q")])
+
+            output = self.session(["-H", "-S", state], [(0.3, b"\r"), (0.3, b"q")])
+
+            self.assertIn(b"HISTORIQUE DES DOCUMENTS", output)
+            self.assertIn(b"second.txt", output)
+            self.assertIn(b"Contenu distinct du second", output)
+
+            output = self.session(["-H", "-S", state],
+                                  [(0.3, b"\x1b[B"), (0.1, b"\r"), (0.3, b"q")])
+            self.assertIn(b"Contenu du premier document", output)
+
     def test_reading_time_persists_and_manual_pause_stops_the_clock(self):
         with tempfile.TemporaryDirectory() as directory:
             folder = Path(directory)
