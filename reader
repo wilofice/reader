@@ -18,7 +18,6 @@ import sqlite3
 import subprocess
 import sys
 import termios
-import textwrap
 import time
 import unicodedata
 from pdf_preview import inspect_pdf, inspect_image
@@ -40,31 +39,6 @@ MARKED_MATH = re.compile(r"\$\$[\s\S]*?\$\$|\\\[[\s\S]*?\\\]|\\\([\s\S]*?\\\)|(?
 
 # Devise de Reader choisie par l'utilisateur, sans attribution à un auteur.
 READING_QUOTE = "Lire, c’est conquérir le monde."
-READING_REMINDER = (
-    'Généreux, pour réussir tes projets et travailler efficacement avec l’IA, '
-    'fais de la lecture ton socle. Lis beaucoup pour comprendre, analyser, '
-    'questionner, critiquer et juger plus vite, puis agir avec discernement. '
-    'Tous tes travaux et tes échanges avec l’IA commencent par la lecture. '
-    'Toujours utiliser le sticky note et noter au moins un mot : '
-    'un seul suffit pour éveiller tes intuitions et activer tes neurones.'
-)
-
-
-def reminder_lines(width, maximum):
-    variants = (
-        READING_REMINDER,
-        'Généreux, lis beaucoup pour comprendre, analyser, questionner, critiquer, '
-        'juger et agir avec l’IA. La lecture est le socle de tes projets. '
-        'Toujours utiliser le sticky note : un seul mot suffit pour éveiller '
-        'tes intuitions et activer tes neurones.',
-        'Généreux, lire est la base. Sticky note : note au moins un mot '
-        'pour éveiller tes intuitions et activer tes neurones.',
-    )
-    for variant in variants:
-        lines = textwrap.wrap(variant, width=max(1, width))
-        if len(lines) <= maximum:
-            return lines
-    return []
 
 
 def state_path():
@@ -651,11 +625,9 @@ def run_ui(screen, text, path, memory, args, position, changed, source=None, off
             if focus_large:
                 body_start = 6 if zen and not help_open else 7
                 body_height = height - body_start - (2 if zen and not help_open else 4)
-            notes_start, notes, quote_row = None, [], None
+            quote_row = None
             if spacious and not (zen and not help_open):
-                notes_start = 4 if focus_large else 3
-                notes = reminder_lines(min(96, width - 4), min(4, max(1, height - 18)))
-                quote_row = notes_start + len(notes)
+                quote_row = 4 if focus_large else 3
                 body_start = quote_row + 3
                 body_height = height - body_start - 4
             panel_visible = panel_open and not zen and not help_open
@@ -773,9 +745,7 @@ def run_ui(screen, text, path, memory, args, position, changed, source=None, off
                 if width >= 65:
                     setting += hint
                 put(2, setting, x=2)
-            if notes_start is not None:
-                for row, line in enumerate(notes, notes_start):
-                    put(row, line, curses.A_DIM, x=2)
+            if quote_row is not None:
                 put(quote_row, READING_QUOTE, curses.A_DIM, x=2)
             put(body_start - 2 if spacious else 2, "─" * (width - 4), curses.A_DIM, x=2)
             if help_open:

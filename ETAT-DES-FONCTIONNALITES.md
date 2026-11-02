@@ -20,7 +20,7 @@ catalogue restent à évaluer avec l'utilisateur.
 | Texte, Markdown et PDF | Aperçu Markdown ; extraction PDF avec Poppler. |
 | Lecture manuelle et automatique | Passages en mots ou lignes, défilement, vitesse et taille réglables. |
 | Reprise et relectures | Position SQLite, cycles de lecture ; terminer avant de commencer le cycle suivant. |
-| Interface et ZEN | Progression, nombre total de mots, rappels personnels, affichage épuré facultatif. |
+| Interface et ZEN | Progression, nombre total de mots, devise courte ; rappels personnels longs masqués par défaut et affichage épuré facultatif. |
 | Images | Pages PDF et images Markdown locales ; iTerm2 ou Quick Look sur macOS. |
 | Repérage des contenus complexes | Indices par page, formules via moteur optionnel ; détection imparfaite, sans explication des figures. |
 | Préparation PDF | Cache enrichi avec `--prepare`, après `./install.sh --layout`. |

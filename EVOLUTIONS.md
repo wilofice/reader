@@ -6,6 +6,10 @@ consulter Git ; l'état consolidé est dans
 
 ## 2 novembre 2026 — Prototype de bibliothèque de lecture
 
+- Interface de lecture : les rappels personnels longs sont désormais masqués
+  par défaut. Seule la devise « Lire, c’est conquérir le monde. » reste visible
+  dans l'en-tête lorsque l'espace le permet. La suite complète valide ce rendu
+  avec 124 tests réussis et sept tests visuels facultatifs ignorés.
 - Sélection vocale automatique : les fiches en anglais utilisent
   `phonon:31m-en`, les autres `phonon:40m-fr`. Une option explicite
   `--speech-model` reste prioritaire ; les fichiers hors catalogue restent en

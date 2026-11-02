@@ -228,6 +228,19 @@ class TerminalTests(unittest.TestCase):
             self.assertIn(b"notes.txt", output)
             self.assertGreater(self.status(args)["position"], 0)
 
+    def test_header_keeps_only_the_short_reading_quote(self):
+        with tempfile.TemporaryDirectory() as directory:
+            folder = Path(directory)
+            document = folder / "notes.txt"
+            document.write_text("Un passage à lire.\n" * 20)
+            args = [str(document), "-S", str(folder / "state.sqlite3")]
+
+            output = self.session(args, [(0.4, b"q")], terminal_size=(24, 100))
+
+            self.assertIn("Lire, c’est conquérir le monde.".encode(), output)
+            self.assertNotIn("Généreux".encode(), output)
+            self.assertNotIn(b"sticky note", output)
+
     def test_reading_time_persists_and_manual_pause_stops_the_clock(self):
         with tempfile.TemporaryDirectory() as directory:
             folder = Path(directory)
