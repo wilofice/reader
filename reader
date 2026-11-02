@@ -71,6 +71,9 @@ class Memory:
             historical INTEGER NOT NULL DEFAULT 0, seconds REAL NOT NULL DEFAULT 0,
             base_seconds REAL NOT NULL DEFAULT 0,
             PRIMARY KEY (path, digest, number))""")
+        self.db.execute("""CREATE TABLE IF NOT EXISTS discovered_documents (
+            path TEXT PRIMARY KEY, discovered TEXT NOT NULL,
+            modified_ns INTEGER NOT NULL, size INTEGER NOT NULL)""")
         self.db.commit()
 
         self.daily = DailyReading(self.db)
@@ -140,10 +143,66 @@ class Memory:
                 WHERE path = ? AND digest = ? AND completed = 0
                 AND number = (SELECT MAX(number) FROM reading_cycles WHERE path = ? AND digest = ?)""",
                 (total, position >= len(text), position >= len(text), str(path), digest, str(path), digest))
+            self.db.execute("DELETE FROM discovered_documents WHERE path = ?", (str(path),))
 
     def history(self):
-        return self.db.execute("""SELECT path, position, length, updated, reading_seconds
-            FROM documents ORDER BY updated DESC, rowid DESC""").fetchall()
+        return self.db.execute("""SELECT path, position, length, updated, reading_seconds FROM (
+            SELECT path, position, length, updated, reading_seconds, rowid AS ordering FROM documents
+            UNION ALL
+            SELECT q.path, 0, 0, q.discovered, 0, -q.rowid FROM discovered_documents q
+            WHERE NOT EXISTS (SELECT 1 FROM documents d WHERE d.path=q.path))
+            ORDER BY updated DESC, ordering DESC""").fetchall()
+
+    def discover(self, folder):
+        folder = Path(folder).expanduser().resolve(strict=True)
+        if not folder.is_dir():
+            raise ValueError(f'Le dossier de lecture est invalide : {folder}')
+        extensions = {'.pdf', '.md', '.markdown', '.mdown'}
+        found = []
+        errors = []
+        for root, directories, filenames in os.walk(folder, followlinks=False,
+                                                     onerror=lambda error: errors.append(error)):
+            directories[:] = [name for name in directories if not name.startswith('.')]
+            for filename in filenames:
+                if filename.startswith('.') or Path(filename).suffix.lower() not in extensions:
+                    continue
+                candidate = Path(root) / filename
+                if candidate.is_symlink():
+                    continue
+                try:
+                    stat = candidate.stat()
+                    path = candidate.resolve(strict=True)
+                except OSError:
+                    continue
+                if path.is_file():
+                    found.append((str(path), stat.st_mtime_ns, stat.st_size))
+                    if len(found) > 50000:
+                        raise ValueError('Le dossier contient plus de 50 000 documents compatibles ; choisissez un dossier plus ciblé.')
+        if errors and not found:
+            raise ValueError(f'Impossible de parcourir le dossier de lecture : {errors[0]}')
+        found_paths = {path for path, _, _ in found}
+        stale = []
+        for (raw_path,) in self.db.execute('SELECT path FROM discovered_documents'):
+            try:
+                Path(raw_path).relative_to(folder)
+            except ValueError:
+                continue
+            if raw_path not in found_paths:
+                stale.append(raw_path)
+        if stale:
+            with self.db:
+                self.db.executemany('DELETE FROM discovered_documents WHERE path=?', ((path,) for path in stale))
+        known = {row[0] for row in self.db.execute('SELECT path FROM documents')}
+        known.update(row[0] for row in self.db.execute('SELECT path FROM discovered_documents'))
+        discovered = sum(path not in known for path, _, _ in found)
+        with self.db:
+            for path, modified, size in found:
+                self.db.execute("""INSERT INTO discovered_documents(path, discovered, modified_ns, size)
+                    SELECT ?, strftime('%Y-%m-%d %H:%M:%f', 'now'), ?, ?
+                    WHERE NOT EXISTS (SELECT 1 FROM documents WHERE path=?)
+                    ON CONFLICT(path) DO UPDATE SET modified_ns=excluded.modified_ns, size=excluded.size""",
+                    (path, modified, size, path))
+        return discovered, len(found)
 
     def close(self):
         self.db.close()
@@ -492,9 +551,8 @@ def select_history(screen, entries):
                 entries[start:start + visible_count]):
             absolute_index = start + row_index
             path = Path(raw_path)
-            progress = f'{position / max(1, length):5.1%}'
-            reading_time = duration(seconds)
-            suffix = f'{progress} · {reading_time}'
+            suffix = (f'{position / length:5.1%} · {duration(seconds)}'
+                      if length else 'nouveau')
             title_width = max(8, width - 10 - len(suffix))
             title = clipped(path.name, title_width)
             if title != path.name and title_width:
@@ -1182,6 +1240,7 @@ def main(argv=None):
     imports.add_argument('--paste', action='store_true', help='coller un texte, puis Ctrl-D pour lire')
     imports.add_argument('--open', dest='saved_name', metavar='NOM', help='reprendre un texte importé par son nom')
     imports.add_argument('--library', action='store_true', help='lister les textes importés et leur progression')
+    parser.add_argument('-F', '--folder', '--inbox', type=Path, help='mémoriser le dossier local de PDF et Markdown à découvrir')
     parser.add_argument('--catalog', action='store_true', help='ouvrir le catalogue de lectures recommandées dans le terminal')
     parser.add_argument('--download-library', action='store_true', help='télécharger les documents disponibles depuis leurs sources officielles')
     parser.add_argument('--download-book', metavar='ID', help='télécharger un document du catalogue')
@@ -1222,8 +1281,14 @@ def main(argv=None):
     importing = args.clipboard or args.paste
     saved_action = importing or args.saved_name is not None or args.library
     catalog_action = args.catalog or args.download_library or args.download_book is not None or args.attach_book is not None or args.open_book is not None
-    if args.file and (saved_action or catalog_action):
+    folder_action = args.folder is not None
+    bare_launch = (args.file is None and not saved_action and not catalog_action and not folder_action
+                   and not args.history and not args.daily and args.goal is None and not args.prepare)
+    if args.file and (saved_action or catalog_action or folder_action):
         parser.error('choisissez un fichier ou une action de bibliothèque')
+    if folder_action and (saved_action or catalog_action or args.history or args.daily or args.prepare
+                          or args.goal is not None or args.status or args.readings or args.new_reading):
+        parser.error('--folder configure seul le dossier de découverte')
     if args.name is not None and not importing:
         parser.error('--name nécessite --clipboard ou --paste')
     if (saved_action or catalog_action) and (args.history or args.daily or args.prepare):
@@ -1233,8 +1298,8 @@ def main(argv=None):
         parser.error('--library liste les textes et s’utilise sans option de progression ou de réglage mémorisé')
     if args.new_reading and (args.restart or args.status or args.history or args.readings or args.daily):
         parser.error("--new-reading s'utilise seul avec les options de lecture")
-    if not args.file and not saved_action and not catalog_action and not args.history and not args.daily and args.goal is None:
-        parser.error("indiquez un fichier, --daily ou --history")
+    if bare_launch and (args.status or args.readings or args.new_reading or args.restart):
+        parser.error('cette option nécessite un document')
     if args.daily and (args.status or args.history or args.readings):
         parser.error('--daily s’utilise sans autre option de consultation')
     if args.prepare and (not args.file or args.history or args.status or args.readings or args.new_reading
@@ -1246,6 +1311,28 @@ def main(argv=None):
         if args.prepare:
             return prepare_document(args.file.expanduser().resolve(strict=True), args.formulas)
         memory = Memory(args.state)
+        if folder_action:
+            folder = args.folder.expanduser().resolve(strict=True)
+            if not folder.is_dir():
+                raise ValueError(f'Le dossier de lecture est invalide : {folder}')
+            previous = memory.daily.get('reading_folder', '')
+            if previous and Path(previous).expanduser() != folder:
+                with memory.db:
+                    memory.db.execute('DELETE FROM discovered_documents')
+            memory.daily.set('reading_folder', folder)
+            discovered, total = memory.discover(folder)
+            print(f'Dossier de lecture mémorisé : {folder} · {discovered} nouveau(x) sur {total} document(s).')
+            print('Lancez désormais simplement : reader')
+            return 0
+        if bare_launch:
+            configured = memory.daily.get('reading_folder', '')
+            if not configured:
+                raise ValueError('Aucun dossier de lecture configuré. Faites-le une fois avec : reader --folder CHEMIN')
+            folder = Path(configured).expanduser()
+            discovered, total = memory.discover(folder)
+            args.history = True
+            if not sys.stdin.isatty() or not sys.stdout.isatty():
+                print(f'Dossier analysé : {discovered} nouveau(x) sur {total} document(s).')
         if catalog_action:
             catalog = CuratedLibrary(memory.db)
             if args.catalog:
@@ -1329,7 +1416,8 @@ def main(argv=None):
                 args.history = False
             else:
                 for path, position, length, updated, seconds in history:
-                    print(f"{position / max(1, length):6.1%}  lu {duration(seconds)}  {updated} UTC  {path}")
+                    state = f'{position / length:6.1%}  lu {duration(seconds)}' if length else 'nouveau         '
+                    print(f"{state}  {updated} UTC  {path}")
                 return 0
         path = args.file.expanduser().resolve(strict=True)
         args.speech_model = args.speech_model or 'phonon:40m-fr'

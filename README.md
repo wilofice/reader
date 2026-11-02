@@ -9,6 +9,35 @@ Suivi : [état des fonctionnalités et priorités](ETAT-DES-FONCTIONNALITES.md) 
 [journal des évolutions](EVOLUTIONS.md) ·
 [stratégie et catalogue de la bibliothèque de culture générale](STRATEGIE-BIBLIOTHEQUE-CULTURE.md).
 
+## Lancer Reader sans indiquer de fichier
+
+Choisissez une fois un dossier consacré aux documents à lire :
+
+```sh
+mkdir -p ~/Documents/a-lire
+reader --folder ~/Documents/a-lire
+```
+
+Ensuite, une seule commande suffit :
+
+```sh
+reader
+```
+
+Reader parcourt ce dossier et ses sous-dossiers, repère les PDF et fichiers
+Markdown qui ne figurent pas encore dans l'historique, puis ouvre le sélecteur
+général. Les nouveautés portent l'état `nouveau` et sont classées avec les
+documents récemment consultés. `↑`/`↓` choisissent et Entrée ouvre ; la reprise
+fonctionne ensuite normalement. Le repérage reste léger : le texte d'un PDF
+n'est extrait qu'au moment de sa première ouverture. Les fichiers et dossiers
+cachés, les liens symboliques et les autres formats sont ignorés.
+
+`-F` est l'alias court de `--folder`. La configuration est locale : exécutez-la
+une fois sur chaque Mac, avec le chemin adapté à cette machine. Changer de
+dossier remplace la file des nouveautés non ouvertes, sans effacer l'historique
+ni les progressions existantes. Un fichier supprimé avant sa première ouverture
+disparaît au prochain parcours.
+
 ## Bibliothèque de culture générale
 
 Ouvrez le catalogue terminal avec `./reader --catalog`. Les flèches déplacent
@@ -486,6 +515,7 @@ Toutes les anciennes formes restent acceptées. Par exemple,
 | `-e` | `--encoding` | Encodage du texte |
 | `-R` | `--raw` | Source Markdown |
 | `-S` | `--state` | Chemin de la base |
+| `-F` | `--folder` | Mémoriser le dossier des documents à lire |
 | `-H` | `--history` | Sélectionner un document de l'historique |
 | `-p` | `--status` | Progression en JSON |
 | `-h` | `--help` | Aide |

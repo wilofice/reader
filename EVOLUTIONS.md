@@ -6,6 +6,11 @@ consulter Git ; l'état consolidé est dans
 
 ## 3 novembre 2026 — Synchronisation directe
 
+- Lancement sans argument : `reader --folder CHEMIN` configure une boîte de
+  lecture locale, puis `reader` seul découvre les nouveaux PDF et Markdown et
+  ouvre l'historique. Le parcours est récursif, ignore les éléments cachés et
+  différera l'extraction PDF jusqu'à la sélection du document. Validation
+  complète : 132 tests réussis, sept tests facultatifs ignorés.
 - Synchronisation directe : ajout de `reader sync export`, `import` et `ssh`.
   Le format JSON portable fusionne progression, cycles, temps, couverture
   quotidienne et textes collés ; chaque import sauvegarde SQLite auparavant.

@@ -13,6 +13,8 @@ import termios
 import time
 import unittest
 
+from tests.test_reader import reader
+
 
 EXECUTABLE = str(Path(__file__).resolve().parents[1] / "reader")
 
@@ -261,6 +263,30 @@ class TerminalTests(unittest.TestCase):
             output = self.session(["-H", "-S", state],
                                   [(0.3, b"\x1b[B"), (0.1, b"\r"), (0.3, b"q")])
             self.assertIn(b"Contenu du premier document", output)
+
+    def test_bare_reader_discovers_and_opens_a_new_markdown_document(self):
+        with tempfile.TemporaryDirectory() as directory:
+            folder = Path(directory)
+            inbox = folder / 'lectures'
+            inbox.mkdir()
+            document = inbox / 'a-decouvrir.md'
+            document.write_text('# Découverte\n\nContenu automatiquement repéré.\n')
+            state = str(folder / 'state.sqlite3')
+            configured = subprocess.run([EXECUTABLE, '-S', state, '--folder', str(inbox)],
+                                        capture_output=True, text=True)
+            self.assertEqual(configured.returncode, 0, configured.stderr)
+
+            output = self.session(['-S', state], [(0.3, b'\r'), (0.3, b'q')])
+
+            self.assertIn(b'HISTORIQUE DES DOCUMENTS', output)
+            self.assertIn(b'nouveau', output)
+            self.assertIn('Contenu automatiquement repéré'.encode(), output)
+            memory = reader.Memory(state)
+            try:
+                self.assertEqual(memory.db.execute(
+                    'SELECT COUNT(*) FROM discovered_documents').fetchone()[0], 0)
+            finally:
+                memory.close()
 
     def test_reading_time_persists_and_manual_pause_stops_the_clock(self):
         with tempfile.TemporaryDirectory() as directory:
