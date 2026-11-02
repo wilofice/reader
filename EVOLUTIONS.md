@@ -4,6 +4,15 @@ Ce journal commence le 31 octobre 2026. Pour les changements antérieurs,
 consulter Git ; l'état consolidé est dans
 [ETAT-DES-FONCTIONNALITES.md](ETAT-DES-FONCTIONNALITES.md).
 
+## 3 novembre 2026 — Synchronisation directe
+
+- Synchronisation directe : ajout de `reader sync export`, `import` et `ssh`.
+  Le format JSON portable fusionne progression, cycles, temps, couverture
+  quotidienne et textes collés ; chaque import sauvegarde SQLite auparavant.
+  Les documents absents restent en attente par empreinte jusqu'à leur ouverture.
+  Aucun paquet supplémentaire n'est requis sur macOS : le transport réutilise
+  SSH. Validation complète : 129 tests réussis, sept tests facultatifs ignorés.
+
 ## 2 novembre 2026 — Prototype de bibliothèque de lecture
 
 - Reprise depuis l'historique : `reader -H` devient un sélecteur interactif de

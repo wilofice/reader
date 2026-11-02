@@ -30,6 +30,7 @@ from saved_texts import SavedTexts, clipboard_text
 from curated_library import CuratedLibrary, read_catalog_key, select_item, speech_model_for_language
 from speech import Speech
 from enrichment import Companion, MODES as COMPANION_MODES
+from reader_sync import adopt_pending, sync_main
 from terminal_focus import (TerminalFocus, FocusScreen, FOCUS_EVENT, is_focused,
                             enable_reports, disable_reports)
 
@@ -96,8 +97,9 @@ class Memory:
             self.db.execute("UPDATE documents SET position = 0 WHERE path = ?", (str(path),))
 
     def resume(self, path, text):
-        row = self.db.execute("SELECT digest, position FROM documents WHERE path = ?", (str(path),)).fetchone()
         digest = hashlib.sha256(text.encode("utf-8")).hexdigest()
+        adopt_pending(self.db, path, digest)
+        row = self.db.execute("SELECT digest, position FROM documents WHERE path = ?", (str(path),)).fetchone()
         changed = row is not None and row[0] != digest
         return (min(max(row[1], 0), len(text)) if row and not changed else 0), changed
 
@@ -1166,7 +1168,14 @@ def run_with_focus(screen, *args):
 
 
 def main(argv=None):
-    parser = argparse.ArgumentParser(description=__doc__)
+    argv = list(sys.argv[1:] if argv is None else argv)
+    if argv and argv[0] == 'sync':
+        try:
+            return sync_main(argv[1:], state_path(), Memory)
+        except (OSError, ValueError, sqlite3.Error, subprocess.SubprocessError) as error:
+            print(f'reader sync : {error}', file=sys.stderr)
+            return 1
+    parser = argparse.ArgumentParser(description=__doc__, epilog='Synchronisation sans cloud : reader sync --help')
     parser.add_argument("file", nargs="?", type=Path, help="fichier texte, Markdown ou PDF")
     imports = parser.add_mutually_exclusive_group()
     imports.add_argument('-c', '--clipboard', action='store_true', help='importer le presse-papiers et lire')

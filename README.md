@@ -956,6 +956,39 @@ une position incorrecte. Utilisez une seule session par document : la dernière
 sauvegarde prévaut. Les PDF sont extraits avec `pdftotext -layout` ; leurs positions
 concernent le texte extrait, pas les pages. Un PDF scanné nécessite un OCR préalable.
 
+### Synchroniser deux Mac sans cloud
+
+Fermez les sessions de lecture sur les deux machines, puis lancez depuis l'une
+d'elles :
+
+```sh
+reader sync ssh genereux@192.168.1.18
+```
+
+La commande récupère l'état distant par SSH, le fusionne localement, puis renvoie
+l'état consolidé. Chaque import crée d'abord une sauvegarde cohérente dans
+`~/.local/state/reader/backups/`. Aucun serveur tiers n'est utilisé et les bases
+SQLite ne sont jamais partagées directement sur le réseau.
+
+La fusion associe les documents par empreinte de contenu : elle conserve la
+position la plus avancée, les cycles terminés, le temps cumulé le plus élevé et
+l'union des mots quotidiens déjà couverts. Les textes collés sont transportés.
+Les PDF et fichiers externes ne le sont pas ; si leur chemin diffère et que le
+fichier manque sur une machine, leur état reste en attente et s'applique
+automatiquement lorsqu'un fichier au contenu identique y est ouvert. Utilisez
+Reader sur une seule machine à la fois et synchronisez avant de changer de Mac.
+
+Pour transporter manuellement un paquet, par exemple sur une clé USB :
+
+```sh
+reader sync export ~/Desktop/reader-sync.json
+reader sync import ~/Desktop/reader-sync.json
+```
+
+Le paquet contient les chemins et les textes collés : il est créé avec des
+permissions privées, mais doit rester confidentiel. Consultez toutes les
+commandes avec `reader sync --help`.
+
 ## Vérification
 
 ```sh
