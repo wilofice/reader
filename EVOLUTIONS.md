@@ -9,8 +9,12 @@ consulter Git ; l'état consolidé est dans
 - Lancement sans argument : `reader --folder CHEMIN` configure une boîte de
   lecture locale, puis `reader` seul découvre les nouveaux PDF et Markdown et
   ouvre l'historique. Le parcours est récursif, ignore les éléments cachés et
-  différera l'extraction PDF jusqu'à la sélection du document. Validation
+  diffère l'extraction PDF jusqu'à la sélection du document. Validation
   complète : 132 tests réussis, sept tests facultatifs ignorés.
+- Configuration initiale appliquée sur les deux Mac avec le dossier personnel
+  `~/Lectures`. Un seul dossier est actif par machine ; répéter `--folder` avec
+  le même chemin réanalyse, tandis qu'un chemin différent remplace uniquement
+  la file des nouveautés et conserve tout l'historique.
 - Synchronisation directe : ajout de `reader sync export`, `import` et `ssh`.
   Le format JSON portable fusionne progression, cycles, temps, couverture
   quotidienne et textes collés ; chaque import sauvegarde SQLite auparavant.

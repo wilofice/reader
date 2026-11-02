@@ -11,11 +11,12 @@ Suivi : [état des fonctionnalités et priorités](ETAT-DES-FONCTIONNALITES.md) 
 
 ## Lancer Reader sans indiquer de fichier
 
-Choisissez une fois un dossier consacré aux documents à lire :
+Reader utilise par convention le dossier personnel `~/Lectures`. Créez-le et
+configurez-le une fois :
 
 ```sh
-mkdir -p ~/Documents/a-lire
-reader --folder ~/Documents/a-lire
+mkdir -p ~/Lectures
+reader --folder ~/Lectures
 ```
 
 Ensuite, une seule commande suffit :
@@ -33,10 +34,17 @@ n'est extrait qu'au moment de sa première ouverture. Les fichiers et dossiers
 cachés, les liens symboliques et les autres formats sont ignorés.
 
 `-F` est l'alias court de `--folder`. La configuration est locale : exécutez-la
-une fois sur chaque Mac, avec le chemin adapté à cette machine. Changer de
-dossier remplace la file des nouveautés non ouvertes, sans effacer l'historique
-ni les progressions existantes. Un fichier supprimé avant sa première ouverture
-disparaît au prochain parcours.
+une fois sur chaque Mac, avec le chemin adapté à cette machine. La commande peut
+être répétée sans danger : avec le même chemin, elle relance simplement le
+parcours ; avec un autre chemin, elle remplace le dossier actif et sa file de
+nouveautés non ouvertes. Elle ne supprime jamais l'historique ni les progressions
+existantes. Un fichier supprimé avant sa première ouverture disparaît au prochain
+parcours.
+
+Reader mémorise actuellement **un seul dossier actif par machine**. La surveillance
+simultanée de plusieurs dossiers (`--folder-add`, `--folder-list` et
+`--folder-remove`) reste une amélioration possible, mais n'est pas nécessaire avec
+le dossier unique `~/Lectures` retenu pour l'usage courant.
 
 ## Bibliothèque de culture générale
 
