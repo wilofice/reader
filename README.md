@@ -31,10 +31,10 @@ et ne sont pas ajoutés à Git. Les liens locaux et la progression utilisent la
 base SQLite Reader ; copier la base **et** le dossier bibliothèque conserve
 les téléchargements. Les fichiers rattachés ailleurs gardent un chemin absolu :
 sur une autre machine, recopiez-les au même chemin ou rattachez-les à nouveau.
-`--download-library`
-télécharge les sources officielles directement accessibles, puis affiche toute
-source qui exige un compte ou refuse l'accès depuis le réseau courant. Il ne
-contourne pas les comptes des éditeurs et ne récupère pas les livres commerciaux.
+`--download-library` télécharge les sources officielles directement accessibles.
+Les sources qui exigent un compte ou refusent l'automatisation restent visibles
+dans le catalogue sans faire échouer l'installation. Reader ne contourne pas les
+comptes des éditeurs et ne récupère pas les livres commerciaux.
 
 Sept fichiers sont déjà téléchargés ici : manuel OpenStax de finance, rapports
 BRI, GIEC, OCDE, Banque mondiale et PNUD, ainsi que l'article arXiv sur Transformer. Le téléchargement
@@ -98,7 +98,7 @@ Essai immédiat sur macOS, sans modèle supplémentaire :
 ```
 
 Pour choisir une voix macOS, listez-les avec `say -v '?'`, puis ajoutez
-`--voice NOM`. Pour Phonon français, installez et démarrez Ollama **0.40.9+**
+`--voice NOM`. Pour Phonon, installez et démarrez Ollama **0.40.9+**
 compatible avec son API audio :
 
 ```sh
@@ -108,12 +108,15 @@ ollama --version
 
 Pour préparer les modèles **avant d'ouvrir Reader**, lancez `./install.sh --models`.
 Cette étape installe et démarre Ollama si nécessaire, puis précharge
-`granite4:latest` et, sur Apple Silicon, `phonon:40m-fr`. Reader peut aussi
-télécharger à la demande un modèle absent, par exemple pour l'anglais. Il faut
+`granite4:latest` et, sur Apple Silicon, `phonon:40m-fr` et `phonon:31m-en`.
+Reader peut aussi télécharger à la demande un modèle absent. Il faut
 une connexion Internet et assez d'espace disque durant la préparation. Les
 modèles ne sont pas inclus dans Git.
-Pour l'anglais, choisissez `--speech-model phonon:31m-en`; il sera téléchargé
-à sa première utilisation.
+Pour un livre ouvert avec `--open-book` ou depuis `--catalog`, Reader sélectionne
+automatiquement `phonon:31m-en` lorsque sa fiche indique l'anglais et
+`phonon:40m-fr` sinon. Un fichier ouvert directement conserve le français par
+défaut, car il n'a pas de métadonnée de langue. `--speech-model NOM` force un
+autre choix. `--status` indique le modèle retenu.
 `--voice default` utilise la voix du modèle ; `ollama show NOM_DU_MODELE`
 indique les voix disponibles. Reader ne met pas à jour les modèles déjà installés.
 La variante française 40M est sous CC BY-NC 4.0 ; l'anglais 31M sous Apache 2.0.
@@ -201,8 +204,7 @@ des documents variés reste à évaluer. Aucun service payant n'est appelé.
 Depuis le dépôt cloné, installez les dépendances puis préparez Ollama et ses modèles :
 
 ```sh
-./install.sh
-./install.sh --models
+./install.sh --all
 ```
 
 Le script vérifie Python **3.10+** avec `curses` et SQLite, Poppler (`pdftotext`,
@@ -226,8 +228,10 @@ Suivez les indications de Homebrew pour rendre ce réglage permanent si besoin.
 Les dépendances indirectes installées ou mises à jour sont gérées par Homebrew.
 iTerm2 et GitHub CLI restent facultatifs. `./install.sh --models` installe
 l'application Ollama officielle par Homebrew, démarre son serveur local et
-télécharge le modèle pédagogique et la voix française avant le lancement de
-Reader. Les téléchargements peuvent prendre du temps et utiliser plusieurs Go.
+télécharge le modèle pédagogique et les voix française et anglaise avant le
+lancement de Reader. `./install.sh --library` télécharge seulement les documents
+publics du catalogue ; `./install.sh --all` enchaîne modèles et bibliothèque.
+Les téléchargements peuvent prendre du temps et utiliser plusieurs Go.
 L'installation automatique de l'application Ollama requiert macOS 14 ou plus
 récent ; si Ollama est déjà installé, le script réutilise son exécutable.
 
@@ -241,8 +245,7 @@ gh auth login
 gh repo clone wilofice/reader
 cd reader
 git switch main
-./install.sh
-./install.sh --models
+./install.sh --all
 ./reader README.md
 ```
 

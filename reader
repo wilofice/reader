@@ -28,7 +28,7 @@ from formula_index import FormulaIndex, EnrichedIndex, available as formulas_ava
 from reading_habits import DailyReading, DailyWordIndex, FocusSession, big_clock
 from focus_ui import choose_focus
 from saved_texts import SavedTexts, clipboard_text
-from curated_library import CuratedLibrary, select_item
+from curated_library import CuratedLibrary, select_item, speech_model_for_language
 from speech import Speech
 from enrichment import Companion, MODES as COMPANION_MODES
 from terminal_focus import (TerminalFocus, FocusScreen, FOCUS_EVENT, is_focused,
@@ -1144,7 +1144,7 @@ def main(argv=None):
     parser.add_argument('-n', '--name', help='nom du texte à importer (sinon demandé dans le terminal)')
     parser.add_argument('--speak', action='store_true', help='activer la voix dès l’ouverture (sinon touche t)')
     parser.add_argument('--tts', choices=('ollama', 'say'), default='ollama', help='moteur vocal, utilisé seulement à la demande')
-    parser.add_argument('--speech-model', default='phonon:40m-fr', help='modèle vocal Ollama')
+    parser.add_argument('--speech-model', help='modèle vocal Ollama (automatique pour les livres du catalogue)')
     parser.add_argument('--voice', default='default', help='voix du moteur choisi')
     parser.add_argument('--audio-rate', type=audio_tempo, default=1.0, help='tempo audio de 0.5 à 2 (FFmpeg si différent de 1)')
     parser.add_argument('--ollama-url', default='http://127.0.0.1:11434', help='adresse du serveur Ollama local')
@@ -1208,6 +1208,8 @@ def main(argv=None):
                     if selected is None:
                         return 0
                     args.file = catalog.path(selected)
+                    args.speech_model = args.speech_model or speech_model_for_language(
+                        catalog.item(selected).get('language'))
                 else:
                     print(catalog.summary())
                     return 0
@@ -1235,6 +1237,8 @@ def main(argv=None):
                     if item.get('download_url'):
                         raise ValueError(f"Document absent ; téléchargez-le avec reader --download-book {args.open_book}.")
                     raise ValueError(f"Document absent ; ajoutez votre fichier avec reader --attach-book {args.open_book} CHEMIN. Source : {item['url']}")
+                args.speech_model = args.speech_model or speech_model_for_language(
+                    catalog.item(args.open_book).get('language'))
         if saved_action:
             library = SavedTexts(memory.db, args.state)
             if args.library:
@@ -1274,6 +1278,7 @@ def main(argv=None):
                 print(f"{position / max(1, length):6.1%}  lu {duration(seconds)}  {updated} UTC  {path}")
             return 0
         path = args.file.expanduser().resolve(strict=True)
+        args.speech_model = args.speech_model or 'phonon:40m-fr'
         source, page_starts = load_document(path, args.encoding, with_pages=True)
         source_position, changed = memory.resume(path, source)
         if args.new_reading:
@@ -1307,6 +1312,7 @@ def main(argv=None):
                 reading_seconds=round(stats.seconds, 2), remaining_words=words.count(position),
                 estimated_remaining_seconds=None if seconds is None else round(seconds, 1),
                 estimate_basis=basis, estimated_wpm=None if rate is None else round(rate, 1),
+                speech_model=args.speech_model,
                 reading_number=cycles[-1][0] if cycles else 1,
                 completed_readings=completed, completed_rereadings=max(0, completed - 1),
                 daily_date=memory.daily.day, daily_words=memory.daily.words(), daily_goal=memory.daily.goal,

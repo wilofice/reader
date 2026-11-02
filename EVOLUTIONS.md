@@ -6,6 +6,18 @@ consulter Git ; l'état consolidé est dans
 
 ## 2 novembre 2026 — Prototype de bibliothèque de lecture
 
+- Sélection vocale automatique : les fiches en anglais utilisent
+  `phonon:31m-en`, les autres `phonon:40m-fr`. Une option explicite
+  `--speech-model` reste prioritaire ; les fichiers hors catalogue restent en
+  français par défaut. `--status` expose le modèle choisi.
+- Installation portable : `./install.sh --models` précharge les deux voix
+  Phonon sur Apple Silicon ; `--library` télécharge les documents publics et
+  `--all` prépare modèles et bibliothèque. Les sources nécessitant un compte ou
+  refusant l'automatisation restent référencées sans faire échouer `--all`.
+- Validation sur Apple Silicon : `./install.sh --all` a installé les deux voix,
+  le modèle pédagogique et les sept PDF publics. Une synthèse anglaise réelle
+  avec `phonon:31m-en` a produit 3,84 secondes d'audio valide. La suite complète
+  compte 123 tests réussis ; sept tests visuels facultatifs ont été ignorés.
 - Correction de la navigation du catalogue : activation explicite des touches
   spéciales, prise en charge des deux séquences terminal courantes pour les
   flèches, et surlignage visible de la ligne active. Vérification réelle dans

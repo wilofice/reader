@@ -53,6 +53,7 @@
       "access": "gratuit sur le site officiel",
       "url": "https://www.imf.org/en/Publications/WEO/Issues/2026/10/13/world-economic-outlook-october-2026",
       "download_url": "https://www.imf.org/-/media/files/publications/weo/2026/october/english/text.pdf",
+      "auto_download": false,
       "note": "Le serveur IMF a refusé le téléchargement depuis cet environnement pendant la préparation du prototype ; la fiche conserve le lien officiel et réessaie au téléchargement."
     },
     {

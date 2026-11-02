@@ -4,6 +4,7 @@ set -euo pipefail
 
 check_only=0
 install_models=0
+install_library=0
 case "${1:-}" in
     --layout)
         if [ "$#" -gt 1 ]; then printf '%s\n' 'Une seule option est acceptée.' >&2; exit 2; fi
@@ -12,12 +13,16 @@ case "${1:-}" in
         ;;
     --check) check_only=1 ;;
     --models) install_models=1 ;;
+    --library) install_library=1 ;;
+    --all) install_models=1; install_library=1 ;;
     -h|--help)
-        printf '%s\n' 'Usage : ./install.sh [--check | --layout | --models]' \
+        printf '%s\n' 'Usage : ./install.sh [--check | --layout | --models | --library | --all]' \
             'Installe les dépendances macOS manquantes : Python 3.10+, Poppler, Chafa.' \
             '--check : vérifier seulement, sans installation ni accès réseau.' \
             '--layout : installer aussi le modèle local de repérage des formules.' \
-            '--models : installer/démarrer Ollama et précharger les modèles Reader avant son lancement.'
+            '--models : installer/démarrer Ollama et précharger les modèles Reader avant son lancement.' \
+            '--library : télécharger les documents librement accessibles de la bibliothèque.' \
+            '--all : préparer les dépendances, les modèles Ollama et la bibliothèque.'
         exit 0 ;;
     '') ;;
     *) printf 'Option inconnue : %s\n' "$1" >&2; exit 2 ;;
@@ -63,7 +68,7 @@ if [ "$check_only" -eq 1 ]; then
     report
     exit 0
 fi
-if python_ready && poppler_ready && chafa_ready && [ "$install_models" -eq 0 ]; then
+if python_ready && poppler_ready && chafa_ready && [ "$install_models" -eq 0 ] && [ "$install_library" -eq 0 ]; then
     report
     printf '%s\n' 'Tout est prêt ; aucune installation nécessaire.' './reader README.md'
     exit 0
@@ -139,14 +144,26 @@ if [ "$install_models" -eq 1 ]; then
     if [ "$(uname -m)" = arm64 ]; then
         printf '%s\n' 'Téléchargement du modèle vocal français : phonon:40m-fr'
         OLLAMA_HOST=127.0.0.1:11434 ollama pull phonon:40m-fr
+        printf '%s\n' 'Téléchargement du modèle vocal anglais : phonon:31m-en'
+        OLLAMA_HOST=127.0.0.1:11434 ollama pull phonon:31m-en
     else
         printf '%s\n' 'Phonon nécessite Apple Silicon ; la voix macOS « say » reste disponible.'
     fi
-    printf '\n%s\n' 'Ollama et les modèles Reader sont prêts. Lancez : ./reader README.md'
+    printf '\n%s\n' 'Ollama et les modèles Reader sont prêts.'
+fi
+if [ "$install_library" -eq 1 ]; then
+    script_dir="$(cd "$(dirname "$0")" && pwd)"
+    reader_installer="${READER_INSTALL_EXECUTABLE:-$script_dir/reader}"
+    printf '%s\n' 'Téléchargement des documents librement accessibles de la bibliothèque Reader.'
+    "$reader_installer" --download-library
+    printf '%s\n' 'Bibliothèque prête. Ouvrez-la avec : ./reader --catalog'
+fi
+if [ "$install_models" -eq 1 ] || [ "$install_library" -eq 1 ]; then
+    printf '\n%s\n' 'Préparation Reader terminée. Lancez : ./reader --catalog'
     exit 0
 fi
 printf '\n%s\n' 'Installation terminée. Si Homebrew était absent du PATH de votre terminal, exécutez :'
 printf 'export PATH="%s/bin:%s/sbin:$PATH"\n' "$brew_prefix" "$brew_prefix"
-printf '\n%s\n' 'Puis lancez ./install.sh --models avant Reader pour installer Ollama et précharger les modèles.' \
+printf '\n%s\n' 'Puis lancez ./install.sh --all avant Reader pour installer les modèles et la bibliothèque.' \
     'Ensuite : ./reader README.md' \
     'iTerm2 est facultatif ; Terminal.app utilise Quick Look automatiquement.'

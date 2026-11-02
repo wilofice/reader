@@ -22,7 +22,8 @@ class InstallerTests(unittest.TestCase):
         self.log = self.folder / "brew.log"
         self.env = {**os.environ, "PATH": f"{self.bin}:/usr/bin:/bin",
                     "SIM_STATE": str(self.state), "SIM_LOG": str(self.log),
-                    "SIM_PREFIX": str(self.folder)}
+                    "SIM_PREFIX": str(self.folder),
+                    "READER_INSTALL_EXECUTABLE": str(self.bin / "reader-install")}
         self.tool("uname", "echo Darwin")
         self.tool("python3", '[ -f "$SIM_STATE/python" ]')
         self.tool("pdftotext", '[ -f "$SIM_STATE/poppler" ]')
@@ -30,6 +31,7 @@ class InstallerTests(unittest.TestCase):
         self.tool("pdfimages", '[ -f "$SIM_STATE/poppler" ]')
         self.tool("pdftocairo", '[ -f "$SIM_STATE/poppler" ]')
         self.tool("chafa", '[ -f "$SIM_STATE/chafa" ]')
+        self.tool("reader-install", 'printf \'%s\\n\' "$*" >> "$SIM_LOG"')
         self.tool("brew", '''if [ "$1" = --prefix ]; then
     echo "$SIM_PREFIX"
 elif [ "$1" = install ]; then
@@ -72,6 +74,15 @@ fi''')
         result = self.run_installer('--layout', '--check')
         self.assertEqual(result.returncode, 2)
         self.assertFalse(self.log.exists())
+
+    def test_library_option_downloads_catalogue_after_dependency_check(self):
+        self.ready("python", "poppler", "chafa")
+
+        result = self.run_installer('--library')
+
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(self.log.read_text().splitlines(), ['--download-library'])
+        self.assertIn('Bibliothèque prête', result.stdout)
 
     def test_installs_only_missing_package_and_can_be_rerun(self):
         self.ready("python", "poppler")

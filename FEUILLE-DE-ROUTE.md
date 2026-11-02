@@ -13,6 +13,8 @@ Le prototype est accessible par `./reader --catalog` et les commandes décrites
 dans le README. Le catalogue versionné recense onze lectures ; les téléchargements
 officiels accessibles, les associations de fichiers et les progressions sont
 locaux. Sept documents sont déjà présents sous `~/.local/share/reader/library/`.
+Les fiches pilotent aussi la voix française ou anglaise ; `./install.sh --all`
+prépare les dépendances, les modèles et les documents publics sur un autre Mac.
 Le FMI a refusé le téléchargement depuis cet environnement et l'AIE demande un
 compte gratuit pour télécharger son rapport complet. Les deux ouvrages
 commerciaux ne sont pas récupérés ; leurs fiches acceptent vos PDF personnels.

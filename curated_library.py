@@ -12,6 +12,12 @@ import urllib.request
 CATALOG_FILE = Path(__file__).with_name('reading_catalog.json')
 
 
+def speech_model_for_language(language):
+    """Return the bundled Phonon model matching a catalogue language label."""
+    normalized = (language or '').strip().lower()
+    return 'phonon:31m-en' if normalized.startswith(('anglais', 'english', 'en')) else 'phonon:40m-fr'
+
+
 def library_dir():
     data_root = os.environ.get('XDG_DATA_HOME')
     base = Path(data_root).expanduser() if data_root else Path.home() / '.local/share'
@@ -125,7 +131,7 @@ class CuratedLibrary:
     def download_all(self, progress=None):
         outcomes = []
         for item in self.items:
-            if not item.get('download_url'):
+            if not item.get('download_url') or item.get('auto_download') is False:
                 continue
             try:
                 path = self.download(item['id'], progress)
