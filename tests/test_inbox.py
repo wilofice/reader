@@ -8,6 +8,30 @@ from tests.test_reader import reader
 
 
 class InboxTests(unittest.TestCase):
+    def test_external_document_gets_a_durable_copy_and_keeps_progress(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            inbox = root / 'Lectures'
+            inbox.mkdir()
+            source = root / 'Downloads' / 'article.md'
+            source.parent.mkdir()
+            text = '# Article\n\nContenu durable.'
+            source.write_text(text)
+            memory = reader.Memory(root / 'state.sqlite3')
+            try:
+                memory.save(source.resolve(), text, 9)
+                copied = reader.durable_reading_copy(source, inbox)
+                memory.relocate(source.resolve(), copied, text)
+
+                self.assertEqual(copied, (inbox / 'article.md').resolve())
+                self.assertEqual(copied.read_text(), text)
+                self.assertEqual(memory.resume(copied, text)[0], 9)
+                self.assertIsNone(memory.db.execute(
+                    'SELECT path FROM documents WHERE path=?', (str(source.resolve()),)).fetchone())
+                self.assertEqual(reader.durable_reading_copy(source, inbox), copied)
+            finally:
+                memory.close()
+
     def test_recursive_discovery_is_idempotent_and_ignores_hidden_or_other_files(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)

@@ -18,6 +18,7 @@ import sqlite3
 import subprocess
 import sys
 import termios
+import tempfile
 import time
 import unicodedata
 from pdf_preview import inspect_pdf, inspect_image
@@ -204,6 +205,20 @@ class Memory:
                     (path, modified, size, path))
         return discovered, len(found)
 
+    def relocate(self, old_path, new_path, text):
+        old_path, new_path = str(old_path), str(new_path)
+        if old_path == new_path:
+            return
+        digest = hashlib.sha256(text.encode('utf-8')).hexdigest()
+        old = self.db.execute('SELECT digest FROM documents WHERE path=?', (old_path,)).fetchone()
+        target = self.db.execute('SELECT digest FROM documents WHERE path=?', (new_path,)).fetchone()
+        if not old or old[0] != digest or target:
+            return
+        with self.db:
+            self.db.execute('UPDATE documents SET path=? WHERE path=?', (new_path, old_path))
+            self.db.execute('UPDATE reading_cycles SET path=? WHERE path=?', (new_path, old_path))
+            self.db.execute('UPDATE daily_coverage SET path=? WHERE path=?', (new_path, old_path))
+
     def close(self):
         self.db.close()
 
@@ -300,6 +315,49 @@ def duration(seconds, rounded_up=False):
 def normalize_text(text):
     text = text.replace("\r\n", "\n").replace("\r", "\n").replace("\f", "\n\n").expandtabs(4)
     return "".join(c for c in text if c == "\n" or not unicodedata.category(c).startswith("C"))
+
+
+def file_digest(path):
+    digest = hashlib.sha256()
+    with Path(path).open('rb') as source:
+        while chunk := source.read(1024 * 1024):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def durable_reading_copy(path, folder):
+    path = Path(path).expanduser().resolve(strict=True)
+    folder = Path(folder).expanduser().resolve(strict=True)
+    try:
+        path.relative_to(folder)
+        return path
+    except ValueError:
+        pass
+    if path.suffix.lower() not in {'.pdf', '.md', '.markdown', '.mdown'}:
+        return path
+    target = folder / path.name
+    source_digest = None
+    if target.exists():
+        if target.is_file() and target.stat().st_size == path.stat().st_size:
+            source_digest = file_digest(path)
+            if file_digest(target) == source_digest:
+                return target.resolve()
+        source_digest = source_digest or file_digest(path)
+        target = folder / f'{path.stem}-{source_digest[:8]}{path.suffix.lower()}'
+        if target.is_file() and target.stat().st_size == path.stat().st_size and file_digest(target) == source_digest:
+            return target.resolve()
+    temporary = None
+    try:
+        with tempfile.NamedTemporaryFile(dir=folder, prefix='.reader-copy-', delete=False) as output:
+            temporary = Path(output.name)
+        shutil.copy2(path, temporary)
+        temporary.chmod(0o600)
+        temporary.replace(target)
+    except BaseException:
+        if temporary:
+            temporary.unlink(missing_ok=True)
+        raise
+    return target.resolve()
 
 
 def load_document(path, encoding, with_pages=False):
@@ -1276,6 +1334,7 @@ def main(argv=None):
     parser.add_argument("-H", "--history", action="store_true", help="choisir ou afficher les lectures mémorisées")
     parser.add_argument("-p", "--status", action="store_true", help="afficher la position du fichier en JSON")
     args = parser.parse_args(argv)
+    direct_file = args.file is not None
     args.mode = {"l": "lines", "w": "words", "s": "scroll"}.get(args.mode, args.mode)
     args.size = args.size or (120 if args.mode == "words" else 15)
     importing = args.clipboard or args.paste
@@ -1419,9 +1478,15 @@ def main(argv=None):
                     state = f'{position / length:6.1%}  lu {duration(seconds)}' if length else 'nouveau         '
                     print(f"{state}  {updated} UTC  {path}")
                 return 0
-        path = args.file.expanduser().resolve(strict=True)
+        original_path = args.file.expanduser().resolve(strict=True)
+        path = original_path
+        if direct_file and not (args.status or args.readings) and sys.stdin.isatty() and sys.stdout.isatty():
+            configured = memory.daily.get('reading_folder', '')
+            if configured:
+                path = durable_reading_copy(path, configured)
         args.speech_model = args.speech_model or 'phonon:40m-fr'
         source, page_starts = load_document(path, args.encoding, with_pages=True)
+        memory.relocate(original_path, path, source)
         source_position, changed = memory.resume(path, source)
         if args.new_reading:
             if not sys.stdin.isatty() or not sys.stdout.isatty():

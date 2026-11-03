@@ -288,6 +288,32 @@ class TerminalTests(unittest.TestCase):
             finally:
                 memory.close()
 
+    def test_direct_external_document_is_copied_into_configured_folder(self):
+        with tempfile.TemporaryDirectory() as directory:
+            folder = Path(directory)
+            inbox = folder / 'Lectures'
+            downloads = folder / 'Downloads'
+            inbox.mkdir()
+            downloads.mkdir()
+            document = downloads / 'exterieur.md'
+            document.write_text('# Extérieur\n\nCopie durable automatique.\n')
+            state = str(folder / 'state.sqlite3')
+            subprocess.check_call([EXECUTABLE, '-S', state, '--folder', str(inbox)],
+                                  stdout=subprocess.DEVNULL)
+
+            output = self.session([str(document), '-S', state], [(0.3, b'q')])
+
+            copied = inbox / document.name
+            self.assertTrue(copied.is_file())
+            self.assertIn('Copie durable automatique'.encode(), output)
+            memory = reader.Memory(state)
+            try:
+                paths = [row[0] for row in memory.db.execute('SELECT path FROM documents')]
+                self.assertIn(str(copied.resolve()), paths)
+                self.assertNotIn(str(document.resolve()), paths)
+            finally:
+                memory.close()
+
     def test_reading_time_persists_and_manual_pause_stops_the_clock(self):
         with tempfile.TemporaryDirectory() as directory:
             folder = Path(directory)

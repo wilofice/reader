@@ -33,6 +33,19 @@ fonctionne ensuite normalement. Le repérage reste léger : le texte d'un PDF
 n'est extrait qu'au moment de sa première ouverture. Les fichiers et dossiers
 cachés, les liens symboliques et les autres formats sont ignorés.
 
+Ouvrir directement un PDF ou Markdown situé ailleurs crée aussi, dès la première
+lecture interactive, une copie privée et atomique dans `~/Lectures` :
+
+```sh
+reader ~/Downloads/nouveau-rapport.pdf
+```
+
+Reader lit ensuite la copie durable et déplace vers elle toute progression déjà
+connue. L'original peut donc être déplacé ou supprimé sans casser la reprise. Un
+nom déjà utilisé avec un contenu différent reçoit un court suffixe d'empreinte ;
+une copie identique n'est pas dupliquée. `--status` reste une consultation et ne
+copie pas le fichier.
+
 `-F` est l'alias court de `--folder`. La configuration est locale : exécutez-la
 une fois sur chaque Mac, avec le chemin adapté à cette machine. La commande peut
 être répétée sans danger : avec le même chemin, elle relance simplement le

@@ -6,6 +6,9 @@ consulter Git ; l'état consolidé est dans
 
 ## 3 novembre 2026 — Synchronisation directe
 
+- Adoption locale : la première ouverture interactive d'un PDF ou Markdown
+  extérieur le copie atomiquement dans `~/Lectures`, réutilise les copies
+  identiques et déplace l'éventuelle progression vers ce chemin durable.
 - Documents physiques : la synchronisation SSH copie désormais les PDF et
   Markdown manquants dans `~/Lectures` sur chaque Mac avant de fusionner la
   mémoire. La lecture ne dépend donc plus du chemin original dès qu'une copie
@@ -14,7 +17,7 @@ consulter Git ; l'état consolidé est dans
   lecture locale, puis `reader` seul découvre les nouveaux PDF et Markdown et
   ouvre l'historique. Le parcours est récursif, ignore les éléments cachés et
   diffère l'extraction PDF jusqu'à la sélection du document. Validation
-  complète : 132 tests réussis, sept tests facultatifs ignorés.
+  complète : 134 tests réussis, sept tests facultatifs ignorés.
 - Configuration initiale appliquée sur les deux Mac avec le dossier personnel
   `~/Lectures`. Un seul dossier est actif par machine ; répéter `--folder` avec
   le même chemin réanalyse, tandis qu'un chemin différent remplace uniquement
