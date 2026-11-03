@@ -6,6 +6,10 @@ consulter Git ; l'état consolidé est dans
 
 ## 3 novembre 2026 — Synchronisation directe
 
+- Documents physiques : la synchronisation SSH copie désormais les PDF et
+  Markdown manquants dans `~/Lectures` sur chaque Mac avant de fusionner la
+  mémoire. La lecture ne dépend donc plus du chemin original dès qu'une copie
+  subsiste sur l'une des deux machines.
 - Lancement sans argument : `reader --folder CHEMIN` configure une boîte de
   lecture locale, puis `reader` seul découvre les nouveaux PDF et Markdown et
   ouvre l'historique. Le parcours est récursif, ignore les éléments cachés et

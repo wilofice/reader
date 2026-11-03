@@ -6,6 +6,7 @@ import hashlib
 import json
 import os
 from pathlib import Path
+import shlex
 import sqlite3
 import subprocess
 import sys
@@ -57,6 +58,7 @@ def _document_record(db, row, saved, catalog):
         'reading_seconds': seconds, 'manual_words': manual_words,
         'manual_seconds': manual_seconds, 'manual_digest': manual_digest,
         'saved_name': saved.get(path), 'catalog_id': catalog.get(path),
+        'available': Path(path).is_file(),
         'cycles': cycles, 'coverage': coverage,
     }
 
@@ -71,7 +73,9 @@ def export_bundle(db, state_path):
         known = {item['digest'] for item in documents}
         for digest, payload in db.execute('SELECT digest, payload FROM sync_pending_documents'):
             if digest not in known:
-                documents.append(json.loads(payload))
+                item = json.loads(payload)
+                item['available'] = False
+                documents.append(item)
     texts = []
     if table_exists(db, 'saved_texts'):
         for name, raw_path, created in db.execute('SELECT name, path, created FROM saved_texts ORDER BY name'):
@@ -79,11 +83,13 @@ def export_bundle(db, state_path):
             if path.is_file() and path.stat().st_size <= 16 * 1024 * 1024:
                 texts.append({'name': name, 'created': created, 'text': path.read_text(encoding='utf-8')})
     daily = dict(db.execute('SELECT day, words FROM daily_words')) if table_exists(db, 'daily_words') else {}
+    folder = db.execute("SELECT value FROM preferences WHERE key='reading_folder'").fetchone()
     return {
         'format': 'reader-sync', 'version': BUNDLE_VERSION,
         'exported_at': datetime.now(timezone.utc).isoformat(),
         'source_home': str(Path.home()), 'documents': documents,
         'saved_texts': texts, 'daily_words': daily,
+        'reading_folder': folder[0] if folder else str(Path.home() / 'Lectures'),
     }
 
 
@@ -286,6 +292,69 @@ def _write(path, data):
     temporary.replace(target)
 
 
+def _scan_configured(memory):
+    configured = memory.daily.get('reading_folder', '')
+    if configured and Path(configured).expanduser().is_dir():
+        return memory.discover(configured)[0]
+    return 0
+
+
+def _copy_from_remote(host, bundle, local_bundle):
+    folder = Path(local_bundle.get('reading_folder') or Path.home() / 'Lectures').expanduser()
+    folder.mkdir(parents=True, exist_ok=True, mode=0o700)
+    local_digests = {item['digest'] for item in local_bundle['documents'] if item.get('available')}
+    copied = 0
+    for item in bundle['documents']:
+        if not item.get('available') or item['digest'] in local_digests:
+            continue
+        source = item.get('source_path', '')
+        name = Path(item.get('basename') or source).name
+        if not source.startswith('/') or not name or any(ord(char) < 32 for char in name):
+            continue
+        target = folder / name
+        if target.exists():
+            continue
+        remote_source = f'{host}:{shlex.quote(source)}'
+        result = subprocess.run(['scp', '-q', '-o', 'BatchMode=yes', '-o', 'ConnectTimeout=8',
+                                 remote_source, str(target)], capture_output=True, timeout=600)
+        if result.returncode:
+            raise ValueError('Copie SSH impossible : ' + result.stderr.decode('utf-8', errors='replace').strip())
+        target.chmod(0o600)
+        copied += 1
+        local_digests.add(item['digest'])
+    return copied
+
+
+def _copy_to_remote(host, local_bundle, remote_bundle):
+    folder = remote_bundle.get('reading_folder') or str(Path(remote_bundle['source_home']) / 'Lectures')
+    setup = subprocess.run(['ssh', '-o', 'BatchMode=yes', '-o', 'ConnectTimeout=8', host,
+                            f'mkdir -p {shlex.quote(folder)} && chmod 700 {shlex.quote(folder)}'],
+                           capture_output=True, timeout=30)
+    if setup.returncode:
+        raise ValueError('Préparation du dossier distant impossible : ' + setup.stderr.decode('utf-8', errors='replace').strip())
+    remote_digests = {item['digest'] for item in remote_bundle['documents'] if item.get('available')}
+    copied = 0
+    for item in local_bundle['documents']:
+        source = Path(item.get('source_path', ''))
+        if not item.get('available') or item['digest'] in remote_digests or not source.is_file():
+            continue
+        target = str(Path(folder) / source.name)
+        exists = subprocess.run(['ssh', '-o', 'BatchMode=yes', '-o', 'ConnectTimeout=8', host,
+                                 f'test -e {shlex.quote(target)}'], timeout=15).returncode == 0
+        if exists:
+            continue
+        remote_target = f'{host}:{shlex.quote(target)}'
+        result = subprocess.run(['scp', '-q', '-o', 'BatchMode=yes', '-o', 'ConnectTimeout=8',
+                                 str(source), remote_target], capture_output=True, timeout=600)
+        if result.returncode:
+            raise ValueError('Copie SSH impossible : ' + result.stderr.decode('utf-8', errors='replace').strip())
+        subprocess.run(['ssh', '-o', 'BatchMode=yes', '-o', 'ConnectTimeout=8', host,
+                        f'chmod 600 {shlex.quote(target)}'], capture_output=True, timeout=15)
+        copied += 1
+        remote_digests.add(item['digest'])
+    return copied
+
+
 def sync_main(argv, default_state, memory_factory):
     parser = argparse.ArgumentParser(prog='reader sync', description='Synchroniser la mémoire Reader sans cloud.')
     parser.add_argument('-S', '--state', type=Path, default=default_state, help='base SQLite locale')
@@ -311,21 +380,28 @@ def sync_main(argv, default_state, memory_factory):
             return 0
         if args.command == 'import':
             result = import_bundle(memory.db, state, decode_bundle(_read(args.source)))
-            print(f"Synchronisation importée : {result['merged']} document(s), {result['pending']} en attente · sauvegarde {result['backup']}")
+            discovered = _scan_configured(memory)
+            print(f"Synchronisation importée : {result['merged']} document(s), {result['pending']} en attente, "
+                  f"{discovered} nouveau(x) · sauvegarde {result['backup']}")
             return 0
         remote = args.remote_reader
         remote_state = ['-S', args.remote_state] if args.remote_state else []
         base = ['ssh', '-o', 'BatchMode=yes', '-o', 'ConnectTimeout=8', args.host, remote, 'sync', *remote_state]
+        local_bundle = export_bundle(memory.db, state)
         fetched = subprocess.run([*base, 'export', '-'], capture_output=True, timeout=60)
         if fetched.returncode:
             raise ValueError('Export SSH impossible : ' + fetched.stderr.decode('utf-8', errors='replace').strip())
         remote_bundle = decode_bundle(fetched.stdout)
+        received = _copy_from_remote(args.host, remote_bundle, local_bundle)
         local_result = import_bundle(memory.db, state, remote_bundle)
+        _scan_configured(memory)
+        sent_files = _copy_to_remote(args.host, local_bundle, remote_bundle)
         merged_data = encode_bundle(export_bundle(memory.db, state))
         sent = subprocess.run([*base, 'import', '-'], input=merged_data, capture_output=True, timeout=60)
         if sent.returncode:
             raise ValueError('Import SSH impossible : ' + sent.stderr.decode('utf-8', errors='replace').strip())
-        print(f"Synchronisation SSH terminée avec {args.host} : {local_result['merged']} document(s) fusionné(s), "
+        print(f"Synchronisation SSH terminée avec {args.host} : {received} fichier(s) reçu(s), "
+              f"{sent_files} envoyé(s), {local_result['merged']} document(s) fusionné(s), "
               f"{local_result['pending']} en attente localement. {sent.stdout.decode('utf-8', errors='replace').strip()}")
         return 0
     finally:

@@ -1003,18 +1003,21 @@ d'elles :
 reader sync ssh genereux@192.168.1.18
 ```
 
-La commande récupère l'état distant par SSH, le fusionne localement, puis renvoie
-l'état consolidé. Chaque import crée d'abord une sauvegarde cohérente dans
+La commande copie aussi dans `~/Lectures` les PDF et Markdown absents de chaque
+Mac, récupère l'état distant, le fusionne localement, puis renvoie l'état
+consolidé. Chaque import crée d'abord une sauvegarde cohérente dans
 `~/.local/state/reader/backups/`. Aucun serveur tiers n'est utilisé et les bases
 SQLite ne sont jamais partagées directement sur le réseau.
 
 La fusion associe les documents par empreinte de contenu : elle conserve la
 position la plus avancée, les cycles terminés, le temps cumulé le plus élevé et
-l'union des mots quotidiens déjà couverts. Les textes collés sont transportés.
-Les PDF et fichiers externes ne le sont pas ; si leur chemin diffère et que le
-fichier manque sur une machine, leur état reste en attente et s'applique
-automatiquement lorsqu'un fichier au contenu identique y est ouvert. Utilisez
-Reader sur une seule machine à la fois et synchronisez avant de changer de Mac.
+l'union des mots quotidiens déjà couverts. Les textes collés et les fichiers de
+lecture sont transportés. Leur copie dans `~/Lectures` rend la reprise
+indépendante du chemin original. Si un original est supprimé sur un Mac, la copie
+de l'autre peut le rétablir lors de la synchronisation suivante. Si toutes les
+copies physiques sont supprimées, seule la progression peut être conservée.
+Utilisez Reader sur une seule machine à la fois et synchronisez avant de changer
+de Mac.
 
 Pour transporter manuellement un paquet, par exemple sur une clé USB :
 
