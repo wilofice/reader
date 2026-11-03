@@ -314,7 +314,9 @@ def _copy_from_remote(host, bundle, local_bundle):
         target = folder / name
         if target.exists():
             continue
-        remote_source = f'{host}:{shlex.quote(source)}'
+        # Modern macOS scp uses SFTP: argv already preserves spaces and quotes,
+        # while adding shell quotes here would make them part of the filename.
+        remote_source = f'{host}:{source}'
         result = subprocess.run(['scp', '-q', '-o', 'BatchMode=yes', '-o', 'ConnectTimeout=8',
                                  remote_source, str(target)], capture_output=True, timeout=600)
         if result.returncode:
@@ -343,7 +345,7 @@ def _copy_to_remote(host, local_bundle, remote_bundle):
                                  f'test -e {shlex.quote(target)}'], timeout=15).returncode == 0
         if exists:
             continue
-        remote_target = f'{host}:{shlex.quote(target)}'
+        remote_target = f'{host}:{target}'
         result = subprocess.run(['scp', '-q', '-o', 'BatchMode=yes', '-o', 'ConnectTimeout=8',
                                  str(source), remote_target], capture_output=True, timeout=600)
         if result.returncode:
