@@ -145,6 +145,10 @@ consulter Git ; l'état consolidé est dans
   par le passage ; les consignes ont été resserrées. La justesse sémantique reste
   à évaluer et n'est pas garantie par la validation JSON ou une citation présente.
   Cet essai ne suffit pas à qualifier la pédagogie du modèle sur des livres.
+- Ancrage des réponses IA : les différences inoffensives d'espaces,
+  d'apostrophes et de tirets sont rapprochées du texte exact du document. Une
+  citation reformulée déclenche une seule demande de correction au modèle ; une
+  citation toujours absente est refusée afin de ne pas masquer une hallucination.
 - Installation Ollama : les modèles vocal et texte absents sont maintenant
   téléchargés à la première utilisation via l'API du serveur configuré ; une
   progression s'affiche dans l'interface. Le panneau choisit `granite4:latest`

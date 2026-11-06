@@ -34,7 +34,7 @@ catalogue restent à évaluer avec l'utilisateur.
 | Synchronisation sans cloud | `reader sync ssh HÔTE` copie les PDF/Markdown manquants dans `~/Lectures`, puis fusionne les deux mémoires par SSH avec sauvegarde préalable. Les chemins originaux peuvent disparaître dès qu'une copie physique subsiste sur un Mac. Usage séquentiel requis. |
 | Bibliothèque stratégique | Catalogue terminal de 11 sources, navigation par flèches ou `j`/`k`, téléchargement officiel, rattachement PDF local et progression par édition. `./install.sh --library` installe les documents accessibles et `--all` prépare modèles et bibliothèque. Sept documents téléchargés localement ; FMI en HTTP 403 et rapport AIE soumis à compte. |
 | Voix — prototype validé par l’utilisateur | Ollama/Phonon ou macOS `say`, pause/reprise, progression à la fin de l'audio. Les livres du catalogue choisissent automatiquement Phonon anglais ou français selon leur fiche. `./install.sh --models` précharge les deux voix ; téléchargement à la demande disponible en secours. La voix française est validée ; voix anglaise, confort prolongé et reprise fine restent à évaluer. |
-| Accompagnement — prototype local en évaluation | Panneau à la demande, contexte/question/indice/résumé/QCM, cache et citations contrôlées. `./install.sh --models` précharge `granite4:latest` ; l’utilisateur évalue la qualité des résultats. |
+| Accompagnement — prototype local en évaluation | Panneau à la demande, contexte/question/indice/résumé/QCM, cache et citations contrôlées. Les variantes typographiques sont rattachées à l’extrait source exact. `./install.sh --models` précharge `granite4:latest` ; l’utilisateur évalue la qualité des résultats. |
 
 ## Priorités confirmées
 

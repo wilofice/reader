@@ -9,6 +9,7 @@ from pathlib import Path
 import subprocess
 import sys
 import tempfile
+import unicodedata
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
@@ -32,14 +33,58 @@ SCHEMA = {
 }
 
 
+def _normalized_with_source_positions(value):
+    """Return comparison text plus the source position of every normalized character."""
+    normalized, positions = [], []
+    punctuation = {
+        '\u2018': "'", '\u2019': "'", '\u201a': "'", '\u201b': "'", '\u2032': "'",
+        '\u201c': '"', '\u201d': '"', '\u201e': '"', '\u201f': '"', '\u2033': '"',
+        '\u2010': '-', '\u2011': '-', '\u2012': '-', '\u2013': '-', '\u2014': '-', '\u2212': '-',
+    }
+    previous_space = False
+    for index, source_character in enumerate(value):
+        expanded = unicodedata.normalize('NFKC', punctuation.get(source_character, source_character)).casefold()
+        for character in expanded:
+            if character.isspace():
+                if previous_space or not normalized:
+                    continue
+                character, previous_space = ' ', True
+            else:
+                previous_space = False
+            normalized.append(character)
+            positions.append(index)
+    if normalized and normalized[-1] == ' ':
+        normalized.pop()
+        positions.pop()
+    return ''.join(normalized), positions
+
+
+def _source_anchor(anchor, text):
+    """Resolve harmless typography changes and return the exact source substring."""
+    stripped = anchor.strip()
+    if stripped in text:
+        return stripped
+    normalized_text, positions = _normalized_with_source_positions(text)
+    normalized_anchor, _ = _normalized_with_source_positions(stripped)
+    if not normalized_anchor:
+        return None
+    start = normalized_text.find(normalized_anchor)
+    if start < 0 or normalized_text.find(normalized_anchor, start + 1) >= 0:
+        return None
+    end = start + len(normalized_anchor) - 1
+    return text[positions[start]:positions[end] + 1]
+
+
 def validate(data, text, mode):
     if not isinstance(data, dict):
         raise ValueError('Réponse pédagogique invalide.')
     for field, limit in [('title', 120), ('body', 1800), ('anchor', 300), ('explanation', 1200)]:
         if not isinstance(data.get(field), str) or len(data[field]) > limit:
             raise ValueError(f'Réponse pédagogique invalide : {field}.')
-    if not data['body'].strip() or not data['anchor'].strip() or data['anchor'] not in text:
+    source_anchor = _source_anchor(data['anchor'], text)
+    if not data['body'].strip() or source_anchor is None:
         raise ValueError('Réponse refusée : son extrait source ne correspond pas au passage.')
+    data['anchor'] = source_anchor
     if mode in ('qcm', 'question') and (len(data['body'].strip()) < 15 or not data['body'].rstrip().endswith('?')):
         raise ValueError('Réponse refusée : une question explicite est nécessaire, pas un résumé.')
     if mode == 'qcm':
@@ -113,7 +158,21 @@ def generate(job):
                 raise
             pull_model(job['url'], job['model'], job.get('status'))
             envelope = chat_request()
-        data = validate(json.loads(envelope['message']['content']), job['text'], job['mode'])
+        raw_content = envelope['message']['content']
+        try:
+            data = validate(json.loads(raw_content), job['text'], job['mode'])
+        except ValueError as error:
+            if 'extrait source' not in str(error):
+                raise
+            payload['messages'] += [
+                dict(role='assistant', content=raw_content),
+                dict(role='user', content=(
+                    'La valeur anchor est introuvable dans le passage. Corrige la réponse JSON : '
+                    'copie anchor caractère pour caractère depuis le passage fourni, sans la '
+                    'reformuler. La citation doit justifier la réponse. Ne change rien au passage.')),
+            ]
+            envelope = chat_request()
+            data = validate(json.loads(envelope['message']['content']), job['text'], job['mode'])
     except HTTPError as error:
         detail = error_body(error)[:1000]
         raise ValueError(f'Ollama HTTP {error.code} : {detail}') from error

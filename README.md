@@ -238,8 +238,13 @@ avec des instructions pédagogiques ; aucun PDF complet ni image n'est envoyé.
 `--ollama-url` configure le serveur utilisé par la voix et l'accompagnement
 (défaut : `http://127.0.0.1:11434`). Le nom du modèle est affiché dans le panneau.
 Le repère de page/ligne vient de Reader ; la citation d'appui doit exister dans
-le passage. Cela ne garantit pas la justesse du contenu généré, marqué « IA ·
+le passage. Reader tolère les différences typographiques sans conséquence
+(espaces, retours à la ligne, apostrophes et tirets), puis affiche la citation
+exacte du document. Une citation absente ou ambiguë entraîne le refus de la
+réponse. Cela ne garantit pas la justesse du contenu généré, marqué « IA ·
 à vérifier ». La lecture ne dépend pas de la disponibilité du serveur.
+Si le modèle reformule sa citation, Reader lui demande automatiquement une
+correction une seule fois ; une citation toujours introuvable reste refusée.
 
 Les réponses sont conservées sous `~/.cache/reader/enrichment-v1/`, ou sous
 `$XDG_CACHE_HOME/reader/enrichment-v1/`. Supprimer ce cache ne supprime pas la
